@@ -1,0 +1,400 @@
+import animator.Animator;
+import animator.Sprite;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+
+// the minesweeper class
+public class MineSweeper {
+    
+    public static void main(String[] args) {
+        MineSweeper ms = new MineSweeper();
+        // sets up animator
+        animator = new Animator(ms, 0, 0, "menu,action", false);
+        // makes the mouse visible
+        animator.SetCursor(0);
+        // animates
+        animator.Animate();
+    }
+    
+    // instance variable of Animator
+    static Animator animator;
+    // the dialogue rectangles
+    static Animator.TextRects textRects;
+    // the width of the board
+    static int width;
+    // the height of the board
+    static int height;
+    // the number of mines
+    static int mines;
+    // the number of flags
+    static int flags;
+    // an array of length 2 containing x and y coordiantes representing the most recently hovered over square before the first click
+    static int[] past_block;
+    // the background images
+    static BufferedImage field, win_screen, lose_screen;
+    // all the sprites used
+    static Sprite untaken, flag, mine, red_mine, x_mine, happy_face, lose_face, win_face;
+    // an array of length 9 containing all the different tiles ordered by number of adjecent mines
+    static Sprite[] tiles;
+    // a nested array containing the tile state of every tile on the board 0=unrevealed 1=flag 2=revealed
+    static int[][] tile_state;
+    // whether the player has made the first click
+    static boolean started;
+    // whether the player has won or lost
+    static boolean win, lose;
+    // a nested array containg the sprites to draw to make the board
+    static Sprite map[][];
+    
+    // animator calls this once at the first frame of the menu
+    public static void Background_menu() {
+        // disables the normal functions from animator of enter, space, and shift
+        animator.nokeys.add(KeyEvent.VK_ENTER);
+        animator.nokeys.add(KeyEvent.VK_SPACE);
+        animator.nokeys.add(KeyEvent.VK_SHIFT);
+        // sets the font for the dialogue boxes
+        textRects = animator.new TextRects(new Font("Helvetica", Font.BOLD, 80));
+        // the first rectangle is preselected
+        textRects.next = true;
+        // gives starting values for width and height and mines
+        width = height = 8;
+        mines = 10;
+    }
+    
+    // animator calls every frame while in the menu
+    public static void Foreground_menu() {
+        // a shortcut variable to animator.graphics
+        Graphics2D g = animator.graphics;
+        // sets the color to blue
+        g.setColor(Color.blue);
+        // covers the screen with the current color
+        g.fillRect(0, 0, animator.width, animator.height);
+        // the height of the dialogue boxes
+        int fh = textRects.fm.getHeight();
+        int h = animator.height;
+        String str;
+        // checks if the player left-clicked
+        boolean mouseTyped1 = animator.MouseTyped(1);
+        // sets the width, height, and number of mines on the board to the input of the player with certain minimums
+        //   and maximums
+        textRects.Start(mouseTyped1);
+        str = textRects.Act("Width of minefield", (int)(0.45 * h), (int)(0.20 * h), Color.yellow,
+                String.valueOf(width), (int)(1.2 * h), null, (int)(1.3 * fh), fh);
+        width = Math.min(30, Math.max(3, GetNatural(str)));
+        str = textRects.Act("Height of minefield", (int)(0.45 * h), (int)(0.35 * h), Color.yellow,
+                String.valueOf(height), (int)(1.2 * h), null, (int)(1.3 * fh), fh);
+        height = Math.min(30, Math.max(3, GetNatural(str)));
+        str = textRects.Act("Number of mines", (int)(0.45 * h), (int)(0.50 * h), Color.yellow,
+                String.valueOf(mines), (int)(1.2 * h), null, (int)(1.3 * fh), fh);
+        mines = Math.min(width * height - 1, Math.max(0, GetNatural(str)));
+        textRects.Act("Start", (int)(0.45 * h), (int)(0.65 * h), Color.red,
+                null, (int)(0.45 * h), null, (int)(2.4 * fh), fh);
+        // starts the game if the player clicks start
+        if (mouseTyped1 && textRects.rect.contains(animator.mouse_point)) {
+            textRects = null;
+            // re-enables the ability to move to the next program by clicking enter
+            animator.CancelTextArea();
+            animator.nokeys.remove(KeyEvent.VK_ENTER);
+            // clicks enter to start the actual game
+            animator.SetKey(KeyEvent.VK_ENTER);
+        }
+    }
+    
+    // returns what is put in the dialogue boxes as Integers
+    public static int GetNatural(String str) {
+        if (str.length() == 0) return -1;
+        for (int i = 0; i < str.length(); ++i) {
+            int j = (int)str.charAt(i) - (int)'0';
+            if (j < 0 || j > 9) return -1;
+        }
+        return Integer.valueOf(str);
+    }
+    
+    // animator calls this at the start of the game. it sets up the variables for the actual game
+    public static void Init_action() {
+        field = animator.ReadAndRescale("minesweeper_images/field.jpg", 1., 1., 2);
+        win_screen = animator.ReadAndRescale("minesweeper_images/win_minesweeper.jpg", 1., 1., 2);
+        lose_screen = animator.ReadAndRescale("minesweeper_images/lose_minesweeper.jpg", 1., 1., 2);
+        double size_x = 0.6667 * animator.width / width;
+        double size_y = 0.6667 * animator.height / height;
+        int size = (int)Math.min(size_x, size_y);
+        past_block = new int[]{-1, -1};
+        tiles = new Sprite[9];
+        String[] tiles_files = new String[]{"minesweeper_images/TakenTile.png", "minesweeper_images/1Tile.png", 
+            "minesweeper_images/2Tile.png", "minesweeper_images/3Tile.png", "minesweeper_images/4Tile.png", 
+            "minesweeper_images/5Tile.png", "minesweeper_images/6Tile.png", "minesweeper_images/7Tile.png", 
+            "minesweeper_images/8Tile.png"};
+        for (int i = 0; i < tiles.length; ++i) tiles[i] = new Sprite(null, tiles_files[i], 0., 0., 0, size, size, 0,  1, "tile");
+        untaken = new Sprite(null, "minesweeper_images/Untaken_Tile.png", 0., 0., 0, size, size, 0,  1, "tile");
+        flag = new Sprite(null, "minesweeper_images/Flag.png", 0., 0., 0, size, size, 0,  1, "tile");
+        mine = new Sprite(null, "minesweeper_images/Mine.png", 0., 0., 0, size, size, 0,  1, "tile");
+        red_mine = new Sprite(null, "minesweeper_images/Clicked_Mine.png", 0., 0., 0, size, size, 0,  1, "tile");
+        x_mine = new Sprite(null, "minesweeper_images/Wrong_Flag.png", 0., 0., 0, size, size, 0,  1, "tile");
+        happy_face = new Sprite(null, "minesweeper_images/Happy_Emoji.png", 0.5, 0.5, 0, size, size, 0,  1, "tile");
+        happy_face.x = animator.width / 2;
+        happy_face.y = 100;
+        lose_face = new Sprite(null, "minesweeper_images/Lose_Emoji.png", 0.5, 0.5, 0, size, size, 0,  1, "tile");
+        lose_face.x = animator.width / 2;
+        lose_face.y = 100;
+        win_face = new Sprite(null, "minesweeper_images/Win_Emoji.png", 0.5, 0.5, 0, size, size, 0,  1, "tile");
+        win_face.x = animator.width / 2;
+        win_face.y = 100;
+        tile_state = new int[width][height];
+        started = false;
+        flags = 0;
+        win = false;
+        lose = false;
+        map = new Sprite[width][height];
+    }
+    
+    // animator calls every frame while in the game
+    public static void Foreground_action() {
+        Graphics2D g = animator.graphics;
+        // checks what to draw whether the player won, lost, or is still playing
+        if (win) {
+            g.drawImage(win_screen, 0, 0, null);
+            win_face.StepAndDraw();
+        } else if (lose) {
+            g.drawImage(lose_screen, 0, 0, null);
+            lose_face.StepAndDraw();
+        } else {
+            g.drawImage(field, 0, 0, null);
+            happy_face.StepAndDraw();
+        }
+        // draws the map
+        for (int i = 0; i < width; ++i) {
+            for (int j = 0; j < height; ++j) {
+                Draw(map[i][j], i, j);
+            }
+        }
+        // restarts if the player clicked the face
+        if (happy_face.Collision(animator.mouse_point.x, animator.mouse_point.y) != null && animator.MousePrePressed(1)) {
+            started = false;
+            for (int i = 0; i < map.length; ++i) for (int j = 0; j < map[i].length; ++j) tile_state[i][j] = 0;
+            past_block[0] = -1;
+            past_block[1] = -1;
+            win = false;
+            lose = false;
+            flags = 0;
+        }
+        // does only what is nescassary if the player lost
+        if (lose) {
+            g.setColor(Color.RED);
+            g.drawString(String.valueOf(mines - flags), 400, 125);
+            for (int i = 0; i < width; ++i) {
+                for (int j = 0; j < height; ++j) {
+                    if (tile_state[i][j] == 0 && map[i][j] != mine) {
+                        Draw(untaken, i, j);
+                    } else if (tile_state[i][j] == 1) {
+                        Draw(flag, i, j);
+                    }
+                }
+            }
+            return;
+        }
+        // does only what is nescassary if the player won
+        if (win) {
+            g.setColor(Color.RED);
+            g.drawString(String.valueOf(mines - flags), 400, 125);
+            for (int i = 0; i < width; ++i) {
+                for (int j = 0; j < height; ++j) {
+                    if (tile_state[i][j] == 0) {
+                        Draw(untaken, i, j);
+                    } else if (tile_state[i][j] == 1) {
+                        Draw(flag, i, j);
+                    }
+                }
+            }
+            return;
+        }
+        boolean left_click = animator.MousePrePressed(1);
+        boolean right_click = animator.MousePrePressed(3);
+        boolean middle_click = animator.MousePrePressed(2);
+        // checks if the player cliked inside the board
+        if (animator.mouse_point.x > (animator.width - untaken.image.getWidth() * width) / 2 && 
+                animator.mouse_point.x < (animator.width + untaken.image.getWidth() * width) / 2 && 
+                animator.mouse_point.y > (animator.height - untaken.image.getHeight() * height) / 2 && 
+                animator.mouse_point.y < (animator.height + untaken.image.getHeight() * height) / 2) {
+            // sets up the coordinates on teh map of the tile clicked
+            int i = (int)((animator.mouse_point.x - (animator.width - untaken.image.getWidth() * width) / 2) / untaken.image.getWidth());
+            int j = (int)((animator.mouse_point.y - (animator.height - untaken.image.getHeight() * height) / 2) / untaken.image.getHeight());
+            // regrenerates the map if the player moved to a different tile but hasn't started yet
+            if (!started && (i != past_block[0] || j != past_block[1])) {
+                GenerateMap(i, j);
+                past_block[0] = i;
+                past_block[1] = j;
+            }
+            // reveals the tile left-clicked on
+            if (left_click && tile_state[i][j] == 0) {
+                started = true;
+                tile_state[i][j] = 2;
+                if (map[i][j] == tiles[0]) {
+                    ArrayList<int[]> work = new ArrayList<>();
+                    work.add(new int[]{i, j});
+                    // reveals more squares if the quare clicked on was a 0
+                    while (work.size() > 0) {
+                        ArrayList<int[]> future = new ArrayList<>();
+                        for (int[] a : work) {
+                            if (map[a[0]][a[1]] == tiles[0]) {
+                                int[][] adjecent = new int[][]{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}, {1, -1}};
+                                for (int[] b : adjecent) {
+                                    if (a[0] + b[0] >= 0 && a[0] + b[0] < map.length && a[1] + b[1] >= 0 
+                                            && a[1] + b[1] < map[0].length && tile_state[a[0] + b[0]][a[1] + b[1]] == 0) {
+                                        tile_state[a[0] + b[0]][a[1] + b[1]] = 2;
+                                        if (map[a[0] + b[0]][a[1] + b[1]] == tiles[0]) future.add(new int[]{a[0] + b[0], a[1] + b[1]});
+                                    }
+                                }
+                            }
+                        }
+                        work.clear();
+                        for (int[] b : future) work.add(b);
+                    }
+                }
+                // checks if the player revealed a mine
+                if (map[i][j] == mine) {
+                    lose = true;
+                    map[i][j] = red_mine;
+                    for (int k = 0; k < map.length; ++k) for (int f = 0; f < map[k].length; ++f) {
+                        if (map[k][f] != mine && tile_state[k][f] == 1) {
+                            map[k][f] = x_mine;
+                            tile_state[k][f] = 2;
+                        }
+                    }
+                }
+            // puts/removes a flag on the tile right-clicked on
+            } else if (right_click) {
+                if (tile_state[i][j] == 0) {
+                    tile_state[i][j] = 1;
+                    ++flags;
+                } else if (tile_state[i][j] == 1) {
+                    tile_state[i][j] = 0;
+                    --flags;
+                }
+            // reveals around the tile middle-clicked if the tile's conditions are met
+            } else if (middle_click) {
+                // checks that the middle-click is valid for the tile clicked on
+                if (tile_state[i][j] == 2) {
+                    int[][] adjecent = new int[][]{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}, {1, -1}};
+                    int adjecent_flags = 0;
+                    for (int[] a : adjecent) {
+                        if (i + a[0] >= 0 && i + a[0] < map.length && j + a[1] >= 0 
+                                && j + a[1] < map[i].length && tile_state[i + a[0]][j + a[1]] == 1) {
+                            ++adjecent_flags;
+                        }
+                    }
+                    for (int k = 0; k < tiles.length; ++k) {
+                        if (map[i][j] == tiles[k]) {
+                            if (k == adjecent_flags) {
+                                // reveals the adjecent squares that are not flagged
+                                for (int[] a : adjecent) {
+                                    if (i + a[0] >= 0 && i + a[0] < map.length && j + a[1] >= 0 &&
+                                        j + a[1] < map[i].length && tile_state[i + a[0]][j + a[1]] != 1) {
+                                        tile_state[i + a[0]][j + a[1]] = 2;
+                                        // checks if a mine was revealed
+                                        if (map[i + a[0]][j + a[1]] == mine) {
+                                            lose = true;
+                                            for (int h = 0; h < map.length; ++h) for (int f = 0; f < map[0].length; ++f) {
+                                                if (map[h][f] != mine && tile_state[h][f] == 1) {
+                                                    map[h][f] = x_mine;
+                                                    tile_state[h][f] = 2;
+                                                }
+                                            }
+                                        }
+                                        // reveals adjecent squares also revealing anything around newly revealed blank squares
+                                        if (map[i + a[0]][j + a[1]] == tiles[0]) {
+                                            ArrayList<int[]> work = new ArrayList<>();
+                                            work.add(new int[]{i + a[0], j + a[1]});
+                                            while (work.size() > 0) {
+                                                ArrayList<int[]> future = new ArrayList<>();
+                                                for (int[] b : work) {
+                                                    if (map[b[0]][b[1]] == tiles[0]) {
+                                                        for (int[] c : adjecent) {
+                                                            if (b[0] + c[0] >= 0 && b[0] + c[0] < map.length && b[1] + c[1] >= 0 
+                                                                    && b[1] + c[1] < map[0].length && tile_state[b[0] + c[0]][b[1] + c[1]] == 0) {
+                                                                tile_state[b[0] + c[0]][b[1] + c[1]] = 2;
+                                                                if (map[b[0] + c[0]][b[1] + c[1]] == tiles[0]) {
+                                                                    future.add(new int[]{b[0] + c[0], b[1] + c[1]});
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                work.clear();
+                                                for (int[] b : future) work.add(b);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // draws the mines counter
+        g.setColor(Color.RED);
+        g.drawString(String.valueOf(mines - flags), 400, 125);
+        // checks if the player has won and draws any unrevealed/flagged tiles over teh number tiles
+        if (started) win = true;
+        for (int i = 0; i < width; ++i) {
+            for (int j = 0; j < height; ++j) {
+                if (tile_state[i][j] == 0) {
+                    Draw(untaken, i, j);
+                } else if (tile_state[i][j] == 1) {
+                    Draw(flag, i, j);
+                }
+                if (map[i][j] != mine && (tile_state[i][j] == 0 || tile_state[i][j] == 1)) win = false;
+            }
+        }
+    }
+    
+    // draws a tile in the appropriate location on the screen
+    public static void Draw(Sprite sprite, int i, int j) {
+        if (sprite == null) return;
+        sprite.x = (animator.width - sprite.image.getWidth() * (width - 2 * i)) / 2;
+        sprite.y = (animator.height - sprite.image.getHeight() * (height - 2 * j)) / 2;
+        sprite.StepAndDraw();
+    }
+    
+    // generates the map based on the mouse location
+    public static void GenerateMap(int i, int j) {
+        map = new Sprite[width][height];
+        // populates the map with mines
+        for (int k = 0; k < mines;) {
+            int x = (int)(Math.random() * width);
+            int y = (int)(Math.random() * height);
+            if (map[x][y] != mine && (x != i || y != j)) {
+                if (mines < width * height - 8) {
+                    if ((x != i - 1 || y != j - 1) && (x != i - 1 || y != j) && (x != i - 1 || y != j + 1) && (x != i || y != j - 1) && 
+                            (x != i || y != j + 1) && (x != i + 1 || y != j - 1) && (x != i + 1 || y != j) && (x != i + 1 || y != j + 1)) {
+                        map[x][y] = mine;
+                        ++k;
+                    }
+                } else {
+                    map[x][y] = mine;
+                    ++k;
+                }
+            }
+        }
+        // populates remaining spaces with numbers according to adjecent mines
+        for (i = 0; i < width; ++i) {
+            for (j = 0; j < height; ++j) {
+                if (map[i][j] != mine) {
+                    int[][] adjecent = new int[][]{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}, {1, -1}};
+                    int adjecent_mines = 0;
+                    for (int[] a : adjecent) {
+                        if (i + a[0] >= 0 && i + a[0] < map.length && j + a[1] >= 0 && j + a[1] < map[i].length && map[i + a[0]][j + a[1]] == mine) {
+                            ++adjecent_mines;
+                        }
+                    }
+                    for (int k = 0; k < tiles.length; ++k) if (adjecent_mines == k) map[i][j] = tiles[k];
+                }
+            }
+        }
+    }
+
+    
+}
