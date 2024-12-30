@@ -1,0 +1,205 @@
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
+
+public class Mines {
+    
+    static Animator animator;
+    static Glob glob;
+    Sprite disc = null;
+    
+    Mines() {
+        animator = Animator.o;
+        glob = Glob.o;
+    }
+    
+    void MeetBoulder(Sprite boulder, Sprite sprite) {
+        if (sprite.Collision(boulder) == null) return;
+        sprite.y += 1. *((sprite.y + sprite.image.getHeight() / 2) -
+                    (boulder.y - boulder.image.getHeight() / 2));
+        if (sprite.y > boulder.y + 0.25 * boulder.image.getHeight()) sprite.health = 0;
+    }
+    
+    void Move_Boulder(Sprite sprite) {
+        if (!glob.FindSprites("blockade", glob.obstacles).isEmpty()) return;
+        MeetBoulder(sprite, glob.astronomer);
+        for (Sprite enemy : glob.GetSprites(glob.enemies)) MeetBoulder(sprite, enemy);
+        sprite.x += 1000 * glob.enemy_time;
+        for (Sprite ground : glob.FindSprites("border", glob.obstacles)) {
+            if (sprite.Collision(ground) != null && ground.y > sprite.y) sprite.y -= 1000 * glob.enemy_time;
+        }
+        sprite.y += 1000 * glob.enemy_time;
+        sprite.angle -= 3 * glob.enemy_time;
+        if (animator.Done("roll")) animator.Sound("../zodiac/Sounds\\rock_move.wav", -15, 1., 10, "roll", 1, 1.);
+        if (sprite.x > glob.width + 0.5 * Math.abs(sprite.scale_x) * sprite.image.getWidth()) {
+            sprite.health = 0.;
+            animator.Quiet("roll");
+            for (Sprite door : glob.GetSprites(glob.doors)) door.Remove("inactive");
+        }
+    }
+    
+    void Move_Rock_Boom(Sprite sprite) {
+        if (!sprite.Contains("cooldown")) sprite.PutDouble("cooldown", 0.);
+        sprite.AddDouble("cooldown", -glob.enemy_time);
+        for (Sprite obstacle : glob.FindSprites("border", glob.obstacles)) {
+            Point2D poi = sprite.Collision(obstacle);
+            if (poi != null) {
+                sprite.x += sprite.x - poi.getX();
+                sprite.y += sprite.y - poi.getY();
+            }
+        }
+        if (sprite.GetDouble("cooldown") < 3.4) Forest.WanderingFlight(sprite, 0.651, 0.650, 0., true, 1.5, 0.4, 1.1, 0.624, 3., 500, 20);
+        if (disc == null) {
+            BufferedImage img = new BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = img.createGraphics();
+            g.setColor(Color.red);
+            g.fillOval(0, 0, img.getWidth(), img.getHeight());
+            disc = new Sprite(img, "", 0.5, 0.5, 0, 1., 1., 1,  1, "disc");
+        }
+        disc.SetFather(sprite, 0.15, 0.95, 0, 9999);
+        disc.scale_x = sprite.scale_x;
+        disc.scale_y = sprite.scale_y;
+        disc.Step();
+        for (Sprite arrow : glob.attacks) {
+            if (arrow.id.equals("arrow") && (arrow.Collision(disc) != null)) sprite.health -= 1;
+        }
+        if (sprite.GetDouble("cooldown") < 0) {
+            sprite.Step();
+            Sprite shot = new Sprite(null, "../zodiac/Extras\\Rock_Boom_Shot.png", 0.5, 0.5, 0, 0.1, 0.1, 1,  1, "Boom_Shot");
+            shot.x = sprite.x;
+            shot.y = sprite.y + sprite.image.getHeight() * 0.2;
+            double dx = glob.astronomer.x - shot.x;
+            double dy = glob.astronomer.y - shot.y;
+            double d = Math.sqrt(dx * dx + dy * dy + 0.1);
+            shot.vx = 800 * dx / d;
+            shot.vy = 800 * dy / d; 
+            shot.angle = Animator.Angle(dx, -dy);
+            shot.PutInt("room", glob.room);
+            shot.PutDouble("safety", 0.2);
+            glob.AddGeneral(shot, glob.enemies);
+            sprite.PutDouble("cooldown", 3.5);
+        }
+        if (sprite.Contains("spawn")) {
+            animator.Sound("../zodiac/Sounds\\spawn.wav", 0, 1., 1, "spawning", 6, 1.);
+            sprite.Remove("spawn");
+        }
+    }
+    
+    boolean GettingAway(Sprite shot, Sprite target, double dist) {
+        double dx = target.x - shot.x;
+        double dy = target.y - shot.y;
+        return (shot.vx * dx + shot.vy * dy < 0.) && (dx * dx + dy * dy < dist * dist); 
+    }
+    
+    void Move_Boom_Shot(Sprite sprite) {
+        sprite.x += sprite.vx * glob.enemy_time;
+        sprite.y += sprite.vy * glob.enemy_time;
+        sprite.AddDouble("safety", -glob.enemy_time);
+        MagicalForest.Reflect(sprite);
+        boolean explode = false;
+        if (!sprite.Contains("reversed")) {
+            explode = sprite.Collision(glob.astronomer) != null;
+            if (!explode) explode = GettingAway(sprite, glob.astronomer, 0.67 * glob.astronomer.image.getHeight());
+        } else {
+            sprite.PutDouble("safety", -1);
+            Sprite closest = null;
+            double distance = Double.MAX_VALUE;
+            for (Sprite rock_boom : glob.FindSprites("Rock_Boom", glob.enemies)) {
+                double dx = rock_boom.x - sprite.x;
+                double dy = rock_boom.y - sprite.y;
+                double d = Math.sqrt(dx * dx + dy * dy);
+                if (d < distance) {
+                    distance = d;
+                    closest = rock_boom;
+                }
+            }
+            if (closest != null) {
+                explode = sprite.Collision(closest) != null;
+                if (!explode) explode = GettingAway(sprite, closest, 3 * closest.image.getHeight());
+            }
+        }
+        for (Sprite obstacle : glob.FindSprites("platform", glob.obstacles)) {
+            if (sprite.Collision(obstacle) != null && !obstacle.Contains("inactive")) {
+                obstacle.PutDouble("inactive", 4);
+                sprite.health = 0;
+                if (sprite.GetDouble("safety") < 0) explode = true;
+            }
+        }
+        for (Sprite obstacle : glob.GetSprites(glob.obstacles)) {
+            if (!explode && !obstacle.Contains("inactive")) explode = sprite.Collision(obstacle) != null;
+        }
+        if (explode && sprite.GetDouble("safety") < 0) {
+            Sprite explosion = new Sprite(null, "../zodiac/Extras\\explosion.png", 0.5, 0.5, 0, 0.7, 0.7, 1,  1, "explosion");
+            explosion.x = sprite.x;
+            explosion.y = sprite.y;
+            explosion.scale_x = explosion.scale_y = 0;
+            explosion.PutInt("room", glob.room);
+            if (sprite.Contains("reversed")) explosion.PutString("reversed", "");
+            glob.attacks.add(explosion);
+            animator.Sound("../zodiac/Sounds\\explosion.wav", -20, 1., 1, "explosion", 10, 1.);
+        }
+        if (explode) sprite.health = 0;
+        if (sprite.x < -30 || sprite.y < -30 || sprite.x > glob.width + 30 || sprite.y > glob.height  + 30) sprite.health = 0;
+    }
+    
+    void Move_explosion(Sprite sprite) {
+        sprite.scale_x = sprite.scale_y += glob.enemy_time * 2;
+        if (sprite.Collision(glob.astronomer) != null) glob.astronomer.health -= 6 * glob.enemy_time;
+        for (Sprite enemy : glob.GetSprites(glob.enemies)) {
+            if (sprite.Contains("reversed") && sprite.Collision(enemy) != null) enemy.health = 0;
+        }
+        for (Sprite obstacle : glob.FindSprites("blockade", glob.obstacles)) {
+            if (sprite.Collision(obstacle) != null) {
+                for (Sprite obstacle2 : glob.FindSprites("blockade", glob.obstacles)) obstacle2.health = 0;
+                break;
+            }
+        }
+        for (Sprite obstacle : glob.FindSprites("platform", glob.obstacles)) {
+            if (sprite.Collision(obstacle) != null) obstacle.PutDouble("inactive", 2);
+        }
+        for (Sprite obstacle : glob.FindSprites("crack", glob.obstacles)) {
+            if (sprite.Collision(obstacle) != null) {
+                obstacle.scale_x *= 1.075;
+                if (obstacle.scale_x > .333333) {
+                    obstacle.health = 0;
+                    animator.Sound("../zodiac/Sounds\\secret.wav", 0, 1., 1, "secret_open", 4, 1.);
+                    for (Sprite rock : glob.FindSprites("border", glob.obstacles)) {
+                        if (rock.Contains("secret")) {
+                            rock.path = "../zodiac/Mines_Obstacles\\Big_Rock_Opened.png";
+                            rock.image = rock.dimage =animator.ReadAndRescale(
+                                    rock.path, 1., 1., 1);
+                        }
+                    }
+                    for (Sprite medkit : glob.FindSprites("medkit", glob.items)) medkit.Remove("inactive");
+                    for (Sprite crown : glob.FindSprites("honor", glob.items)) crown.Remove("inactive");
+                }
+            }
+        }
+        if (sprite.scale_x > 1) {
+            sprite.health = 0;
+            animator.Quiet("explosion");
+        }
+    }
+    
+    void Move_honor(Sprite sprite) {
+        if (!sprite.Contains("px")) return;
+        sprite.health = 0.;
+        glob.astronomer.path = glob.astronomer_with_crown_path;
+        glob.astronomer.image = glob.astronomer.dimage = glob.astronomer_with_crown;
+        animator.Sound("../zodiac/Sounds\\funny.wav", -22, 1., 1, "secret", 1, 1.);
+    }
+    
+    void Room_800() {
+        for (Sprite obstacle : glob.FindSprites("platform", glob.obstacles)) {
+            if (obstacle.Contains("inactive")) obstacle.AddDouble("inactive", -glob.enemy_time);
+            double dx = glob.astronomer.x - obstacle.x;
+            double dy = glob.astronomer.y - obstacle.y;
+            double d = Math.sqrt(dx * dx + dy * dy);
+            if (obstacle.Contains("inactive") && obstacle.GetDouble("inactive") < 0 && 
+                    d > obstacle.image.getWidth() * obstacle.scale_x) obstacle.Remove("inactive");
+        }
+    }
+    
+    
+}
