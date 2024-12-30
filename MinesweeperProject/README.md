@@ -12,4 +12,4 @@ I accomplished this using an array list combined with a while loop to manage the
 
 This project not only helped solidify my foundational programming skills but also introduced me to new concepts that have greatly benefited my work on larger projects.
 
-The files "Animator" and "Sprite"
+The "Animator" and "Sprite" files are support tools created by my father to assist me in this project.
