@@ -1,0 +1,85 @@
+import java.awt.Color;
+import java.util.ArrayList;
+
+public class Ocean {
+    
+    static Animator animator;
+    static Glob glob;
+    
+    Ocean() {
+        animator = Animator.o;
+        glob = Glob.o;
+    }
+    
+    void Room_301() {
+        glob.DrawString("Breath with aqua Power!", 80, Color.GREEN, 5, 500, 100);
+    }
+    
+    void Move_shark(Sprite sprite) {
+        sprite.d_x = sprite.d_y = 5.;
+        sprite.dist_flip = 15.;
+        sprite.angle = Animator.Angle(glob.astronomer.x - sprite.x, sprite.y - glob.astronomer.y);
+        sprite.x += 150. * glob.enemy_time * Math.cos(sprite.angle);
+        sprite.y -= 150. * glob.enemy_time * Math.sin(sprite.angle);
+        if (sprite.image == null) sprite.Image();
+        if (!glob.InWater(sprite.x, sprite.y - 0.4 * Math.abs(sprite.scale_y) * sprite.image.getHeight()) ||
+                !glob.InWater(sprite.x, sprite.y + 0.4 * Math.abs(sprite.scale_x) * sprite.image.getWidth()* Math.sin(sprite.angle)))
+            sprite.y += 300 * glob.enemy_time;
+        double dx = glob.astronomer.x - sprite.x;
+        double dy = glob.astronomer.y - sprite.y;
+        boolean outside = Math.sqrt(dx * dx + dy * dy) > 600;
+        if (outside) {
+            sprite.Remove("hot");
+        } else {
+            sprite.PutString("hot", "");
+        }
+        animator.Sound("../zodiac/Sounds\\Rowing A Boat-SoundBible.com-2108783030.wav", -15, 1., 1, "shark", 1, 3.);
+        glob.EnemyLiftAstronomer(sprite, 0.5, 2.);
+        if (sprite.Contains("py")) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+        }
+    }
+    
+    void Move_log(Sprite sprite) {
+        if (sprite.Contains("speed")) {
+            double v = 30 * glob.enemy_time * sprite.GetDouble("speed");
+            sprite.x +=  v * Math.cos(sprite.angle);
+            sprite.y -= v * Math.sin(sprite.angle);
+        }
+        sprite.angle += sprite.vangle;
+        if (sprite.Contains("move_counter")) {
+            sprite.AddDouble("move_counter", glob.enemy_time);
+            if (Math.abs(sprite.angle) > Math.PI / 2) {
+                ArrayList<Sprite> obs = glob.GetSprites(glob.obstacles);
+                for (int i = obs.size() - 1; i >= 0; --i) {
+                    if (obs.get(i) == sprite) {
+                        obs.remove(i);
+                    }
+                }
+            }
+        }
+        sprite.AddDouble("durability", -glob.enemy_time);
+        if (sprite.GetDouble("durability") > 0) return;
+        for (Sprite shark : glob.FindSprites("shark", glob.enemies)) {
+            if (sprite.Collision(shark) != null) {
+                Sprite log = sprite.clone();
+                log.scale_x = 0.5;
+                log.PutDouble("durability", 9e9);
+                log.PutDouble("original_durability", 9e9);
+                log.PutDouble("speed", -10 * glob.enemy_time);
+                log.vangle = 0.1 * glob.enemy_time;
+                log.PutDouble("move_counter", 0.);
+                log.x -= 0.25 * log.image.getWidth();
+                glob.AddGeneral(log, glob.obstacles);
+                sprite.scale_x *= 0.5;
+                sprite.x += 0.25 * sprite.image.getWidth();
+                sprite.PutDouble("durability", 9e9);
+                sprite.PutDouble("speed", 10 * glob.enemy_time);
+                sprite.vangle = -0.1 * glob.enemy_time;
+                sprite.PutDouble("move_counter", 0.);
+            }
+        }
+    }
+    
+}
