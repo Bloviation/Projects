@@ -1,0 +1,317 @@
+import java.awt.geom.Point2D;
+import java.util.ArrayList;
+
+public class Forest {
+    
+    static Animator animator;
+    static Glob glob;
+    
+    Forest() {
+        animator = Animator.o;
+        glob = Glob.o;
+    }
+    
+    void Room_101() {
+        if (glob.GetSprites(glob.enemies).isEmpty()) for (Sprite door : glob.GetSprites(glob.doors)) door.Remove("inactive");
+    }
+    
+    void Room_103() {
+        if (Animator.MyRand() > 10. * glob.enemy_time) return;
+        double rose_x = Animator.MyRand() * animator.width;
+        double rose_y = Animator.MyRand() * animator.height;
+        for (Sprite obstacle : glob.GetSprites(glob.obstacles)) {
+            if (obstacle.Collision(rose_x, rose_y) != null) {
+                Sprite rose = new Sprite(null, "../zodiac/Forest_Enemies\\rose_with_thorns.png", 0.5, 0.5, 0, 0.15, 0.15, 1,  1, "rose");
+                rose.x = rose_x;
+                rose.y = rose_y;
+                rose.scale_x = 0;
+                rose.scale_y = 0;
+                rose.health = 1.;
+                rose.PutInt("room", glob.room);
+                rose.PutInt("ind", glob.GetSprites(glob.enemies).size());
+                glob.AddGeneral(rose, glob.enemies);
+                break;
+            }
+        }
+    }
+    
+    void Move_Sagittarius(Sprite sprite) {
+        glob.PickCons(sprite);
+    }
+    
+    void Move_Aquarius(Sprite sprite) {
+        glob.PickCons(sprite);
+    }
+    
+    static void Move_bee(Sprite sprite) {
+        WanderingFlight(sprite, 0.3, 0., 0., false, 1.5, 2, 1.1, 3.12, 0.8, 300, 5);
+        animator.Sound("../zodiac/Sounds\\Wasp-SoundBible.com-863699866.wav", -20, 1., 1, "annoyance", 1, 1.5);
+        glob.EnemyLiftAstronomer(sprite, 0.1, 3.);
+        if (sprite.Contains("py") && (sprite.GetDouble("py") + 20 < Glob.o.astronomer.y)) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+            sprite.health -= 0.5;
+        }
+    }
+    
+    void Move_wasp(Sprite sprite) {
+        WanderingFlight(sprite, 0.5, 0., 0., false, 1.5, 1, 1.1, 1.5, 0.8, 500, 5);
+        animator.Sound("../zodiac/Sounds\\Wasp-SoundBible.com-863699866.wav", -20, 1., 1, "annoyance", 1, 1.5);
+        glob.EnemyLiftAstronomer(sprite, 0.1, 3.);
+        if (sprite.Contains("py") && (sprite.GetDouble("py") + 20 < glob.astronomer.y)) {
+            glob.astronomer.health -= 1.;
+            glob.invins_frames = 1.5;
+        }
+    }
+    
+    void Move_froglv1(Sprite sprite) {
+        if (!sprite.Contains("tongued")) {
+            sprite.PutString("tongued", "");
+            Sprite tongue = new Sprite(null, "../zodiac/Extras\\frog_tongue.png", 0.01, 0.6, 0, 1., 1., 1,  1, "froglv1_tongue");
+            tongue.PutInt("room", glob.room);
+            tongue.SetFather(sprite, 0.83, 0.28, 0, 9999);
+            tongue.scale_x = 0.;
+            tongue.scale_y = sprite.scale_y;
+            tongue.health = 999.;
+            tongue.PutString("temp", "");
+            glob.enemies.get(glob.room).add(tongue);
+        }
+        sprite.dist_flip = 1.;
+        boolean jumping = Jumper(sprite, 1, 500, 75, 1000, true);
+        if (jumping) animator.Sound("../zodiac/Sounds\\Bull Frog-SoundBible.com-1416996315.wav", -10, 1., 1, "boing", 1, 0.1);
+        glob.EnemyLiftAstronomer(sprite, 0.5, 3.);
+        if (sprite.Contains("px")) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+            glob.astronomer.PutDouble("poison rate", (glob.astronomer.GetDouble("poison") * glob.astronomer.GetDouble("poison rate") + 0.25) /
+                    (glob.astronomer.GetDouble("poison") + 1));
+            glob.astronomer.AddDouble("poison", 1.);
+            glob.astronomer.father = null;
+        }
+        sprite.x = Math.max(0, sprite.x);
+        sprite.x = Math.min(glob.width, sprite.x);
+        if (glob.HitChecker(sprite, 0.1, true)) {
+            animator.Sound("../zodiac/Sounds\\croak.wav", -10, 1., 1, "pain", 3, 0.);
+        }
+    }
+    
+    void Move_froglv1_tongue(Sprite sprite) {
+        glob.EnemyLiftAstronomer(sprite, 0.5, 3.);
+        LickAstronomer(sprite, 5, 0.3, 2.5, 2.5, 9999., true, 0.5);
+    }
+    
+    void Move_snaketaillv1(Sprite sprite) {
+        double timer = 5.;
+        double dx = glob.astronomer.x - sprite.x;
+        double dy = glob.astronomer.y - sprite.y;
+        double d = Math.sqrt(dx * dx + dy * dy);
+        if (sprite.Contains("counter")) {
+            double count = sprite.GetDouble("counter") - glob.enemy_time;
+            if (count > 0) {
+                sprite.PutDouble("counter",  count);
+            } else {
+                sprite.Remove("counter");
+            }
+        }
+        if (!sprite.Contains("counter") && ((dx > 0) == (sprite.scale_x > 0)) &&
+                (d < 0.5 * animator.height)) {
+            sprite.path = "../zodiac/Forest_Enemies\\snake.png";
+            sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path, 0.25, 0.25, 1);
+            sprite.center_x = sprite.image.getWidth() * 0.08;
+            sprite.center_y = sprite.image.getHeight() * 0.1;
+            sprite.id = "snakelv1";
+            sprite.vx = sprite.scale_x;
+            sprite.vy = sprite.scale_y;
+            sprite.vangle = sprite.angle;
+            sprite.PutDouble("counter", timer);
+        }
+        if (sprite.Contains("rush")) {
+            glob.astronomer.x += glob.astronomer.x > sprite.GetDouble("throw")? -200 * glob.enemy_time : 200 * glob.enemy_time;
+            glob.astronomer.y = Math.min(animator.height, glob.astronomer.y + 200 * glob.enemy_time);
+        }
+    }
+    
+    void Move_snakelv1(Sprite sprite) {
+        double timer = 5.;
+        glob.EnemyLiftAstronomer(sprite, 0.5, 3.);
+        double[] dd = Extender(sprite, 0., timer, 0.5, 2.5, 1.2, 5.);
+        if (dd[3] == 0.) return;
+        if (sprite.Contains("px")) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+            glob.astronomer.SetFather(sprite, 1, 0.5, 0, 9999);
+            glob.astronomer.PutString("rush", "");
+        }
+        if ((glob.astronomer.father == sprite) && (sprite.scale_x < 0.1)) {
+            glob.astronomer.father = null;
+        }
+        if (sprite.Contains("rush")) glob.astronomer.y =
+                Math.min(animator.height, glob.astronomer.y + 200 * glob.enemy_time);
+        if (sprite.scale_x <= 0.) {
+            sprite.scale_x = sprite.vx;
+            sprite.scale_y = sprite.vy;
+            sprite.angle = sprite.vangle;
+            sprite.path = "../zodiac/Forest_Enemies\\snake_tail.png";
+            sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path, 1., 1., 1);
+            sprite.center_x = sprite.image.getWidth() * 0.5;
+            sprite.center_y = sprite.image.getHeight() * 0.5;
+            sprite.id = "snaketaillv1";
+        }
+    }
+    
+    void Move_rose(Sprite sprite) {
+        if (sprite.scale_x == 1.) {
+            animator.Sound("../zodiac/sounds\\Slide Closed-SoundBible.com-1521580537.wav", 0, 1., 1, "growing", 100, 0.3);
+        }
+        sprite.scale_x = Math.min(1., sprite.scale_x + 0.3 * glob.enemy_time);
+        sprite.scale_y = Math.min(1., sprite.scale_y + 0.3 * glob.enemy_time);
+        if (sprite.scale_x == 1. && sprite.scale_y == 1.) {
+            sprite.y += 100 * glob.enemy_time;
+        }
+        if (sprite.y > animator.height + sprite.image.getHeight() * sprite.scale_y / 2) {
+            ArrayList<Sprite> ens = glob.GetSprites(glob.enemies);
+            int ind = sprite.GetInt("ind");
+            if ((ind >= ens.size()) || (ens.get(ind) != sprite)) {
+                for (ind = 0; ind < ens.size(); ++ind) {
+                    if (ens.get(ind) == sprite) break;
+                }
+            }
+            Sprite last = ens.get(ens.size() - 1);
+            if (last.id.equals("rose")) last.PutInt("ind", ind);
+            ens.set(ind, last);
+            ens.remove(ens.size() - 1);
+        }
+        glob.EnemyLiftAstronomer(sprite, 0., 0.);
+        if (sprite.Contains("py")) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+        }
+    }
+    
+    void Move_miner(Sprite item) {
+        if (!item.Contains("px")) return;
+        item.health = 0.;
+        glob.tutorial_writing = "              BACKUP REQUESTED!\nOur hired archers can only hold them off\nfor so long. "
+                + "Please, we need more skilled\nwarriors, preferably some who could\ndeflect shots. "
+                + "I'm not sure how much\nlonger we can hold out!\n-John the miner";
+    }
+    
+    void Room_105() {
+        if (glob.GetSprites(glob.enemies).isEmpty()) {
+            for (Sprite door : glob.GetSprites(glob.doors)) door.Remove("inactive");
+        }
+    }
+    
+    public static void WanderingFlight(Sprite sprite, double agro_range, double near_range, double out_range,
+            boolean stay, double amplitude1, double frequency1, double amplitude2, double frequency2,
+            double rando, double velocity, double dist_flip) {
+        if (!sprite.Contains("phase1")) sprite.PutDouble("phase1", rando * (2 * Animator.MyRand() - 1));
+        if (!sprite.Contains("phase2")) sprite.PutDouble("phase2", rando * (2 * Animator.MyRand() - 1));
+        double dx = glob.astronomer.x - sprite.x;
+        double dy = glob.astronomer.y - sprite.y;
+        double a = Animator.Angle(dx, dy);
+        double dd = dx * dx + dy * dy;
+        double v = velocity * Animator.MyRand() * glob.enemy_time;
+        double aa = amplitude1 * Math.cos(frequency1 * animator.total_time + sprite.GetDouble("phase1")) +
+                amplitude2 * Math.cos(frequency2 * animator.total_time + sprite.GetDouble("phase2"));
+        agro_range *= animator.height;
+        near_range *= animator.height;
+        out_range *= animator.height;
+        if (dd > agro_range * agro_range) {
+            sprite.Remove("hot");
+        } else if (dd > near_range * near_range) {
+            sprite.PutString("hot", "");
+            aa *= 0.2;
+        } else {
+            sprite.PutString("hot", "");
+            aa *= -0.5;
+            v = -v;
+        }
+        a += aa;
+        dx = v * Math.cos(a);
+        dy = v * Math.sin(a);
+        double sx = sprite.x + dx;
+        if ((sprite.Contains("hot") && !stay) || (sx >= -out_range && sx < glob.width + out_range) ||
+                (sx < -out_range && dx > 0.) || (sx >= glob.width + out_range && dx < 0.))
+            sprite.x = sx;
+        double sy = sprite.y + dy;
+        if ((sprite.Contains("hot") && !stay) || (sy >= -out_range && sy < glob.height + out_range) ||
+                (sy < -out_range && dy > 0.) || (sy >= glob.height + out_range && dy < 0.))
+            sprite.y = sy;
+        sprite.dist_flip = dist_flip;
+    }
+    
+    public static boolean Jumper(Sprite sprite, double jump_frequency, double jump_speed, double velocity, double jump_height, boolean jump_when_hit) {
+        boolean jumping = false;
+        for (Sprite obstacle : glob.GetSprites(glob.obstacles)) {
+            Point2D p = sprite.Collision(obstacle);
+            if (p != null && p.getY() > sprite.y) {
+                sprite.vx = sprite.vy = 0;
+                sprite.Remove("jump");
+                if ((Animator.MyRand() < jump_frequency * glob.enemy_time) ||
+                        (jump_when_hit && glob.HitChecker(sprite, 0., false, "old_health2"))) {
+                    sprite.y -= 10;
+                    sprite.vy = -jump_speed;
+                    sprite.vx = glob.astronomer.x < sprite.x? -velocity : velocity;
+                    jumping = true;
+                    sprite.PutString("jump", "");
+                }
+                break;
+            }
+        }
+        sprite.x += sprite.vx * glob.enemy_time;
+        sprite.y += sprite.vy * glob.enemy_time;
+        sprite.vy += glob.gravity * glob.enemy_time * jump_speed * jump_speed / jump_height;
+        return jumping;
+    }
+    
+    public static double[] Extender(Sprite sprite, double target_height, double timer, double range,
+            double out_velocity, double in_velocity, double angle_tracking) {
+        double dx = glob.astronomer.x - sprite.x;
+        double dy = glob.astronomer.y - target_height * glob.astronomer.scale_y * glob.astronomer.image.getHeight() - sprite.y;
+        double d = Math.sqrt(dx * dx + dy * dy);
+        if (!sprite.Contains("counter") || sprite.GetDouble("counter") <= 0) return new double[] {dx, dy, d, 0};
+        double count = sprite.GetDouble("counter");
+        sprite.PutDouble("counter", Math.max(0., count - glob.enemy_time));
+        if (count == timer) {
+            sprite.scale_x = 0.;
+            sprite.scale_y = Math.abs(sprite.scale_y) * Math.signum(dx);
+        }
+        if (count > timer / 2) {
+            sprite.angle += (Animator.Angle(dx, -dy) - sprite.angle) *
+                    (count == timer? 1.: Math.min(1., angle_tracking * glob.enemy_time));
+            sprite.scale_x += out_velocity * glob.enemy_time;
+            if (sprite.Contains("px") ||
+                    (Math.abs(sprite.scale_x) * sprite.image.getWidth() > range * animator.height)) {
+                sprite.PutDouble("counter", timer / 2);
+            }
+        } else {
+            sprite.scale_x = Math.max(0., sprite.scale_x - in_velocity * glob.enemy_time);
+        }
+        return new double[] {dx, dy, d, 1};
+    }
+    
+    public static void LickAstronomer(Sprite sprite, double timer, double range,
+            double out_velocity, double in_velocity, double angle_tracking,
+            boolean grab_astronomer, double demage_astronomer) {
+        if (sprite.father == null) return;
+        double[] dd = Extender(sprite, 0.3, timer, range,
+                out_velocity, in_velocity, angle_tracking);
+        if (dd[3] == 0.) {
+            double sfw = Math.abs(sprite.father.scale_x) * sprite.image.getWidth();
+            if ((sprite.father.scale_y * dd[0] > 0.) &&
+                    (dd[2] < 1.5 * range * animator.height) &&
+                    (Math.abs(dd[0]) > 0.5 * dd[2]) &&
+                    (Math.abs(glob.astronomer.x - sprite.father.x) > 0.6 * sfw) &&
+                    !glob.astronomer.Contains("frog")) {
+                sprite.PutDouble("counter", timer);
+            }
+        } else {
+            if (sprite.Contains("px") && glob.astronomer.father == null) {
+                if (grab_astronomer) glob.astronomer.SetFather(sprite, 1, 0.5, 0, 9999);
+                glob.astronomer.health -= demage_astronomer;
+            }
+        }
+    }
+    
+}
