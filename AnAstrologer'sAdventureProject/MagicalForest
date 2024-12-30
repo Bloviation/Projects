@@ -1,0 +1,294 @@
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.util.ArrayList;
+
+public class MagicalForest {
+    
+    static Animator animator;
+    static Glob glob;
+    public static ArrayList<SoundWaves> soundwaves;
+    static Sprite scorpion_tail;
+    
+    MagicalForest() {
+        animator = Animator.o;
+        glob = Glob.o;
+        soundwaves = new ArrayList<>();
+    }
+    
+    void Move_Leo(Sprite sprite) {
+        glob.PickCons(sprite);
+    }
+    
+    void Move_Scorpio(Sprite sprite) {
+        glob.PickCons(sprite);
+    }
+    
+    void Move_great_guardian(Sprite sprite) {
+        glob.EnemyLiftAstronomer(sprite, -1, 0);
+        if (sprite.Contains("py")) {
+            glob.astronomer.health -= 3.;
+            glob.invins_frames = 1.5;
+        }
+        if (glob.astronomer.Collision(sprite) != null) {
+            glob.astronomer.x -= 10;
+        }
+        if (!sprite.Contains("pinecone_wait") || sprite.GetDouble("pinecone_wait") == 0) {
+            sprite.PutDouble("pinecone_wait", 3);
+            Sprite pinecone = new Sprite(null, "../zodiac/MagicForest_Enemies\\pine_cone_missile.png", 0.5, 0.5, 0, 0.15, 0.15, 1,  1, "cone");
+            pinecone.PutInt("room", glob.room);
+            pinecone.PutInt("collided", 0);
+            pinecone.x = sprite.x + sprite.image.getWidth() * sprite.scale_x * 0.2;
+            pinecone.y = sprite.y + sprite.image.getHeight() * sprite.scale_y * 0.2;
+            pinecone.health = 9e9;
+            glob.AddGeneral(pinecone, glob.enemies);
+            pinecone.angle = Animator.Angle(glob.astronomer.x - pinecone.x, pinecone.y - glob.astronomer.y);
+            pinecone.vx = 400. * Math.cos(pinecone.angle);
+            pinecone.vy = -400. * Math.sin(pinecone.angle);
+        }
+        sprite.PutDouble("pinecone_wait", Math.max(0, sprite.GetDouble("pinecone_wait") - glob.enemy_time));
+    }
+    
+    void Move_cone(Sprite sprite) {
+        glob.EnemyLiftAstronomer(sprite, -1, 0);
+        if (sprite.Contains("py")) {
+            glob.astronomer.health -= 1.5;
+            glob.invins_frames = 1.5;
+        }
+        sprite.x += sprite.vx * glob.enemy_time;
+        sprite.y += sprite.vy * glob.enemy_time;
+        if (sprite.x > animator.width + 150 || sprite.x < -150 || sprite.y > animator.height + 150 || sprite.y < -150) {
+            sprite.health = 0;
+        }
+        Reflect(sprite);
+        if (sprite.Contains("reversed")) {
+            for (Sprite treant : glob.FindSprites("great_guardian", glob.enemies)) {
+                if (sprite.Collision(treant) != null) {
+                    treant.health -= 1;
+                    sprite.health = 0;
+                    animator.Sound("../zodiac/Sounds\\Tree_Pain.wav", 0, 1., 1, "pain", 3, 1.);
+                }
+            }
+        }
+    }
+    
+    void Move_shaman(Sprite sprite) {
+        if (!sprite.Contains("tongued")) {
+            sprite.PutString("tongued", "");
+            Sprite tongue = new Sprite(null, "../zodiac/Extras\\frog_tongue.png", 0.01, 0.6, 0, 1., 1., 1,  1, "shaman_tongue");
+            tongue.PutInt("room", glob.room);
+            tongue.SetFather(sprite, 0.95, 0.24, 0, 9999);
+            tongue.scale_x = 0.;
+            tongue.scale_y = sprite.scale_y;
+            tongue.health = 100.;
+            tongue.PutString("temp", "");
+            glob.enemies.get(glob.room).add(tongue);
+        }
+        if (sprite.GetInt("attack") == 0 && sprite.GetDouble("time") > 5 && Math.random() < 0.02 && !sprite.Contains("lick") &&
+                !sprite.Contains("jump")) {
+            sprite.PutInt("attack", 1);
+            animator.Sound("../zodiac/Sounds\\thunder.wav", -20, 1., 5, "thunder", 1, 1.);
+            sprite.PutDouble("time", 0);
+            sprite.PutDouble("starting_y", sprite.y);
+            sprite.PutInt("decided", 0);
+        }
+        sprite.dist_flip = 1.;
+        if (sprite.GetInt("attack") == 0) Forest.Jumper(sprite, 0.5, 500, 100, 1000, true);
+        glob.EnemyLiftAstronomer(sprite, 0.5, 5.);
+        if (sprite.Contains("px")) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+            if (glob.astronomer.father != null) {
+                glob.astronomer.path = glob.astronomer_frog_path;
+                glob.astronomer.image = glob.astronomer.dimage = glob.astronomer_frog;
+                glob.astronomer.PutDouble("frog", 3);
+            }
+            glob.astronomer.father = null;
+        }
+        if (sprite.GetInt("attack") == 1) {
+            if (sprite.GetDouble("time") > 2.8) sprite.PutInt("attack", 0);
+            sprite.y = Glob.PiecewiseLinear(sprite.GetDouble("time"), new double[]{0, 1, 1.25, 2.5}, 
+                    new double[]{sprite.GetDouble("starting_y"), -325, -325, sprite.GetDouble("starting_y")});
+            if (sprite.GetDouble("decided") == 0 && sprite.GetDouble("time") > 1.1) {
+                sprite.x = glob.astronomer.x;
+                sprite.PutInt("decided", 1);
+            }
+            Sprite lightning = new Sprite(null, "../zodiac/Extras\\Lightning.png", 0.5, 0., 0, 0.48, 1.455, 1, 1, "lightning");
+            lightning.x = sprite.x;
+            lightning.y = Glob.PiecewiseLinear(sprite.GetDouble("time"), new double[]{0, 1, 1.25, 2.5}, 
+                    new double[]{0, -animator.height - 150, -animator.height - 150, 0});
+            if (sprite.y > -325 && (sprite.GetDouble("time") < 1.2 || sprite.GetDouble("decided") == 1)) {
+                lightning.StepAndDraw();
+                if (lightning.Collision(glob.astronomer) != null && glob.invins_frames == 0) {
+                    glob.astronomer.health -= 0.5;
+                    glob.invins_frames = 1.5;
+                }
+            }
+            if (sprite.y == sprite.GetDouble("starting_y") && sprite.GetDouble("time") > 0) {
+                Sprite lightning_ex = new Sprite(null, "../zodiac/Extras\\Lightning_Explosion.png", 0.5, 0., 0, 0.6, 0.9, 1,  1, "lightning_explosion");
+                lightning_ex.x = sprite.x;
+                lightning_ex.y = sprite.y - sprite.image.getHeight() * 0.2;
+                lightning_ex.StepAndDraw();
+                if (lightning_ex.Collision(glob.astronomer) != null && glob.invins_frames == 0) {
+                    glob.astronomer.health -= 1;
+                    glob.invins_frames = 1.5;
+                }
+            }
+        } else {
+            animator.Quiet("thunder");
+        }
+        sprite.AddDouble("time", glob.enemy_time);
+    }
+    
+    void Move_shaman_tongue(Sprite sprite) {
+        if (sprite.father == null) return;
+        glob.EnemyLiftAstronomer(sprite, 0.5, 3.);
+        if (sprite.father.GetInt("attack") == 0) Forest.LickAstronomer(sprite, 3, 0.5, 1., 1., 0.1, true, 0.5);
+        if (sprite.Contains("counter") && (sprite.GetDouble("counter") > 0)) {
+            sprite.father.PutString("lick", "");
+        } else {
+            sprite.father.Remove("lick");
+        }
+        if (sprite.health < 100) {
+            sprite.father.health -= 100 - sprite.health;
+            sprite.health = 100;
+        }
+    }
+    
+    void Room_701() {
+        //ZodiacDraw.constellations.get("Scorpio").partial = 1.;
+        if (glob.GetSprites(glob.enemies).isEmpty()) {
+            for (Sprite door : glob.GetSprites(glob.doors)) {
+                door.Remove("inactive");
+            }
+        }
+    }
+    
+    static void Scorpion_tail() {
+        if (scorpion_tail == null) {
+            scorpion_tail = new Sprite(null, "../zodiac/Extras/Scorpio_tail.png", 0., 0.8, -0.9, 0.25, 0.25, 1,  1, "scorpion_tail");
+            if (glob.astronomer.scale_x * scorpion_tail.scale_x < 0) scorpion_tail.scale_x *= -1;
+            scorpion_tail.PutString("temp", "");
+        }
+        if (!scorpion_tail.Contains("time")) scorpion_tail.PutDouble("time", 0);
+        if (!scorpion_tail.Contains("attack_movement_y")) scorpion_tail.PutDouble("attack_movement_y", 0);
+        if (!scorpion_tail.Contains("attack_movement_x")) scorpion_tail.PutDouble("attack_movement_x", 0);
+        scorpion_tail.StepAndDraw();
+    }
+    
+    static void Move_scorpion_tail(double poison, double poison_rate) {
+        if (scorpion_tail.Contains("pressed")) {
+            scorpion_tail.PutDouble("attack_movement_y", Glob.PiecewiseLinear(scorpion_tail.GetDouble("time"),
+                new double[]{0, 1./3, 1}, new double[]{0, -140, -130}));
+            scorpion_tail.PutDouble("attack_movement_x", Glob.PiecewiseLinear(scorpion_tail.GetDouble("time"),
+                new double[]{0, 2./3, 1}, new double[]{0, 130, 130}));
+            scorpion_tail.angle = ((glob.astronomer.scale_x > 0) ? 1 : -1) * Glob.PiecewiseLinear(scorpion_tail.GetDouble("time"), 
+                            new double[]{0, 2./3, 1}, new double[]{0, -1.75, -1.75});
+            scorpion_tail.AddDouble("time", glob.astronomer_time);
+        }
+        if (glob.astronomer.scale_x * scorpion_tail.scale_x < 0) scorpion_tail.scale_x *= -1;
+        scorpion_tail.x = glob.astronomer.x + ((glob.astronomer.scale_x > 0) ? -100 : 100) + 
+                ((glob.astronomer.scale_x > 0) ? 1 : -1) * scorpion_tail.GetDouble("attack_movement_x");
+        scorpion_tail.y = glob.astronomer.y - 25 + scorpion_tail.GetDouble("attack_movement_y");
+        if (scorpion_tail.GetDouble("time") > 1) {
+            //fade
+            ZodiacDraw.constellations.get("Scorpio").partial = 0;
+        }
+        for (Sprite enemy : glob.GetSprites(glob.enemies)) {
+            if (scorpion_tail.Collision(enemy) != null && scorpion_tail.GetDouble("time") > 0) {
+                enemy.health -= 0.5;
+                if (!enemy.Contains("poison")) {
+                    enemy.PutDouble("poison", poison);
+                    enemy.PutDouble("poison_rate", poison_rate);
+                } else {
+                    enemy.PutDouble("poison_rate",
+                            (enemy.GetDouble("poison") * enemy.GetDouble("poison_rate") + poison * poison_rate) /
+                                    (enemy.GetDouble("poison") + poison));
+                    enemy.AddDouble("poison", poison);
+                }
+                scorpion_tail.x = 10000;
+                ZodiacDraw.constellations.get("Scorpio").partial = 0;
+                scorpion_tail.PutDouble("time", 0);
+                scorpion_tail.Remove("pressed");
+                scorpion_tail.PutDouble("attack_movement_y", 0);
+                scorpion_tail.PutDouble("attack_movement_x", 0);
+                scorpion_tail.angle = 0;
+            }
+        }
+    }
+    
+    static void ScorpionTailAction() {
+        if (ZodiacDraw.constellations.get("Scorpio").partial > 0) {
+            Scorpion_tail();
+            Move_scorpion_tail(4., 1);
+        } else if (scorpion_tail != null) {
+            scorpion_tail.x = 10000;
+            scorpion_tail.PutDouble("time", 0);
+            scorpion_tail.Remove("pressed");
+            scorpion_tail.PutDouble("attack_movement_y", 0);
+            scorpion_tail.PutDouble("attack_movement_x", 0);
+            scorpion_tail.angle = 0;
+        }
+    }
+    
+    public static class SoundWaves {
+        double vx;
+        double vy;
+        double vex;
+        double vey;
+        double x;
+        double y;
+        double ex;
+        double ey;
+        double rx;
+        double ry;
+        boolean alive;
+        double p;
+        
+        SoundWaves(double vx_, double vy_, double vex_, double vey_, double x_, double y_, double p_) {
+            vx = vx_;
+            vy = vy_;
+            vex = vex_;
+            vey = vey_;
+            x = x_;
+            y = y_;
+            ex = 0;
+            ey = 0;
+            alive = true;
+            p = p_;
+        }
+        
+        void StepAndDraw() {
+            x -= vx * glob.enemy_time;
+            y -= vy * glob.enemy_time;
+            ex += (vex + vx) * glob.enemy_time;
+            ey += (vey + vy) * glob.enemy_time;
+            Graphics2D g = animator.graphics;
+            g.setColor(Color.WHITE);
+            int thick = (int) Math.min(20, p * p / (ex * ex + ey * ey + 1));
+            if (thick > 0) {
+                g.setStroke(new BasicStroke(thick));
+                g.drawOval((int)(x - Sprite.tran_x), (int)(y - Sprite.tran_y), (int)ex, (int)ey);
+            } else {
+                alive = false;
+            }
+        }
+    }
+    
+    static void Reflect(Sprite sprite) {
+        for (SoundWaves sw : soundwaves) {
+            double dx = 2 * (sw.x + sw.ex * 0.5 - sprite.x) / sw.ex;
+            double dy = 2 * (sw.y + sw.ey * 0.5 - sprite.y) / sw.ey;
+            double dc = 2 * sprite.image.getWidth() / sw.ex;
+            double d = Math.sqrt(dx * dx + dy * dy) - dc;
+            double u = sprite.vx * dx + sprite.vy * dy;
+            if (d < 1. && u > 0) {
+                sprite.vx = -sprite.vx;
+                sprite.vy = -sprite.vy;
+                sprite.angle += Math.PI;
+                sprite.PutString("reversed", "");
+            }
+        }
+    }
+    
+}
