@@ -1,0 +1,206 @@
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.TreeMap;
+
+public class ZodiacDraw {
+
+    static Animator animator;
+    public static TreeMap<String, Sprite> constellations;
+    int old_x, old_y;
+    int minx, miny, maxx, maxy;
+    Sprite drawing, simage;
+    BufferedImage compare_image;
+    boolean submit;
+    boolean cursing;
+    double display_counter;
+    ArrayList<Sprite> training_forgrounds;
+    
+    public ZodiacDraw(ArrayList<Sprite> training_forgrounds_) {
+        animator = Animator.o;
+        constellations = new TreeMap<>();
+        Sprite cons = new Sprite(null, "../zodiac/Common_Foregrounds\\Sagittarius.png", 0., 0., 0, 1., 1., 1,  1, "Sagittarius", false);
+        cons.PutString("tutorial", "        You have unlocked Sagittarius!\nSagittarius, when drawn, will grant one"
+                + "\nuse of an arrow with perfect accuracy,"
+                + "\njust like the Centaurs. It can be shot by\npressing 'f' and will be aimed at your\nmouse, dealing 1 damage."
+                + " If you try to\ndraw while you have an arrow at the\nready, you will lose focus and lose the\narrow.");
+        cons.PutDouble("requirement", 0.25);
+        cons.SetPartial(0., 0., null, 1.);
+        constellations.put("Sagittarius", cons);
+        cons = new Sprite(null, "../zodiac/Common_Foregrounds\\Aquarius.png", 0., 0., 0, 0.5, 0.5, 1,  1, "Aquarius", false);
+        cons.PutString("tutorial", "          You have unlocked Aquarius!\nAquarius, when drawn, will give you a\n30 sec. "
+                + "effect that will grant a deeper\nconnection with the water, allowing for a\nbreath of 10 sec. and the ability to\nquickly swim.");
+        cons.PutDouble("requirement", 0.18);
+        cons.SetPartial(0., -0.033, null, 1.);
+        constellations.put("Aquarius", cons);
+        cons = new Sprite(null, "../zodiac/Common_Foregrounds\\Leo.png", 0., 0., 0, 0.5, 0.5, 1,  1, "Leo", false);
+        cons.PutString("tutorial", "              You have unlocked Leo!\nLeo, when drawn, will give you 5 sec.\nto release a great roar."
+                + " To roar, press 'f'.\nThis will deflect shots back into enemies.\nThis roar can blow away even the most\npowerful winds.");
+        cons.PutDouble("requirement", 0.21);
+        cons.SetPartial(0., -0.2, null, 1.);
+        constellations.put("Leo", cons);
+        cons = new Sprite(null, "../zodiac/Common_Foregrounds\\Cancer.png", 0., 0., 0, 0.5, 0.5, 1, 1, "Cancer", false);
+        cons.PutString("tutorial", "           You have unlocked Cancer!\nCancer, "
+                + "when drawn will create a shell\nabove you that can take up to 2 damage\nbefore breaking. Just like a crab, "
+                + "you can\nonly move sideways while this is active.\n"
+                + "Jumping will break the enchantment\ninstantly.\n\nIMPORTANT: only usable in the\ncolosseum.");
+        cons.PutDouble("requirement", 0.18);
+        cons.SetPartial(0., 0., null, 1.);
+        constellations.put("Cancer", cons);
+        cons = new Sprite(null, "../zodiac/Common_Foregrounds\\Scorpio.png", 0., 0., 0, 0.5, 0.5, 1,  1, "Scorpio", false);
+        cons.PutString("tutorial", "          You have unlocked Scorpio!\nScorpio, when drawn, will give you 5\nseconds "
+                + "to stab down with a great\nscorpion tail. To stab down, press 'f'.\n"
+                + "This will deal low damage followed by a\nhigh amount of poison damage.\nSome enemies are resistant or weak to\npoison!");
+        cons.PutDouble("requirement", 0.2);
+        cons.SetPartial(0., -0.2, null, 1.);
+        constellations.put("Scorpio", cons);
+        cons = new Sprite(null, "../zodiac/Common_Foregrounds\\Libra.png", 0., 0., 0, 0.5, 0.5, 1,  1, "Libra", false);
+        cons.PutString("tutorial", "            You have unlocked Libra!\nLibra, when drawn, will conjure floating\n"
+                + "scales which can be used as a platform\nfor 5 seconds. They appear where your\nmouse is at the time of submission.");
+        cons.PutDouble("requirement", 0.18);
+        cons.SetPartial(0., -0.125, null, 1.);
+        constellations.put("Libra", cons);
+        submit = true;
+        training_forgrounds = training_forgrounds_;
+    }
+    
+    public void Refresh() {
+        submit = false;
+        BufferedImage dimage = new BufferedImage(animator.width, animator.height, BufferedImage.TYPE_INT_ARGB);
+        drawing = new Sprite(dimage, "", 0., 0., 0, 1., 1., 1,  1, "drawing", false);
+        drawing.x = drawing.y = 0;
+        minx = animator.width;
+        miny = animator.height;
+        maxx = maxy = 0;
+    }
+    
+    public void Foreground(boolean mousePressed1, boolean mouseTouched1, boolean mouseTyped3) {
+        if (mouseTyped3 && (maxx - minx > 30) && (maxy - miny > 30)) {
+            if (drawing == null) {
+                cursing = true;
+                return;
+            }
+            cursing = false;
+            submit = true;
+            double greatest = 99998;
+            simage = null;
+            for (Sprite cons : constellations.values()) {
+                boolean inactive = true;
+                for (Sprite sprite : training_forgrounds) {
+                    if (sprite.id.equals(cons.id)) {
+                        inactive = sprite.Contains("inactive");
+                        break;
+                    }
+                }
+                if (inactive) continue;
+                BufferedImage comimg = RescaleDrawing(cons.image);
+                double grt = ImagesDistance(comimg, cons.image);
+                double grtw = grt * cons.GetDouble("requirement");
+                if (grtw < greatest && grt < cons.GetDouble("requirement")) {
+                    simage = cons;
+                    compare_image = comimg;
+                    greatest = grtw;
+                }
+            }
+            if (simage != null) {
+                simage.partial = 1.;
+                simage = simage.clone();
+                simage.scale_x = (maxx - minx + 0.) / simage.image.getWidth();
+                simage.scale_y = (maxy - miny + 0.) / simage.image.getHeight();
+                simage.x = minx;
+                simage.y = miny;
+                display_counter = 2;
+            }
+            Refresh();
+        }
+        if (cursing && mousePressed1) {
+            if (submit) Refresh();
+            int mousex = animator.mouse_point.x;
+            int mousey = animator.mouse_point.y;
+            if (old_x >= -5) {
+                Graphics2D g = drawing.image.createGraphics();
+                g.setColor(Color.RED);
+                g.setStroke(new BasicStroke(3));
+                g.drawLine(old_x, old_y, mousex, mousey);
+            }
+            old_x = mousex;
+            old_y = mousey;
+            minx = Math.min(minx, mousex);
+            miny = Math.min(miny, mousey);
+            maxx = Math.max(maxx, mousex);
+            maxy = Math.max(maxy, mousey);
+        } else {
+            old_x = -99;
+        }
+        if (mouseTouched1) {
+            cursing = true;
+        }
+        display_counter -= animator.frame_time;
+        if ((display_counter > 0.) &&(simage != null) && (compare_image != null)) {
+            simage.partial = 1.;
+            simage.StepAndDraw();
+        }
+        if (!submit) animator.graphics.drawImage(drawing.image, 0, 0, null);
+    }
+    
+    int[][] ComputeDistance(BufferedImage image) {
+        int[][] d = new int[image.getWidth()][image.getHeight()];
+        for (int i = 0; i < d.length; ++i) {
+            for (int j = 0; j < d[i].length; ++j) {
+                d[i][j] = (image.getRGB(i, j) & 0xff000000) == 0? 99999 : 0;
+            }
+        }
+        for (int i = 0; i < d.length; ++i) {
+            for (int j = 1; j < d[i].length; ++j) {
+                d[i][j] = Math.min(d[i][j], d[i][j - 1] + 1);
+            }
+        }
+        for (int i = 0; i < d.length; ++i) {
+            for (int j = d[i].length - 2; j >= 0; --j) {
+                d[i][j] = Math.min(d[i][j], d[i][j + 1] + 1);
+            }
+        }
+        for (int j = 0; j < d[0].length; ++j) {
+            for (int i = 1; i < d.length; ++i) {
+                d[i][j] = Math.min(d[i][j], d[i - 1][j] + 1);
+            }
+        }
+        for (int j = 0; j < d[0].length; ++j) {
+            for (int i = d.length - 2; i >= 0; --i) {
+                d[i][j] = Math.min(d[i][j], d[i + 1][j] + 1);
+            }
+        } 
+        return d;
+    }
+    
+    double ImagesDistance(BufferedImage image1, BufferedImage image2) {
+        if (image1.getWidth() != image2.getWidth() || image1.getHeight() != image2.getHeight()) {
+            System.err.println("unequal size images detected!");
+            System.exit(2);
+        }
+        int[][] dist1 = ComputeDistance(image1);
+        int[][] dist2 = ComputeDistance(image2);
+        double greatest = Double.MIN_VALUE;
+        for (int i = 0; i < dist1.length; ++i) {
+            for (int j = 0; j < dist1[i].length; ++j) {
+                greatest = Math.max(Math.abs(dist1[i][j] - dist2[i][j]), greatest);
+            }
+        }
+        return greatest / Math.max(dist1.length, dist1[0].length);
+    }
+    
+    BufferedImage RescaleDrawing(BufferedImage image) {
+        drawing.scale_x = image.getWidth() / (maxx - minx + 1.);
+        drawing.scale_y = image.getHeight() / (maxy - miny + 1.);
+        drawing.x = -drawing.scale_x * minx;
+        drawing.y = -drawing.scale_y * miny;
+        BufferedImage compare_image = new BufferedImage(image.getWidth(),
+                image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        drawing.StepAndDraw(compare_image.createGraphics());
+        return compare_image;
+    }
+    
+    
+}
