@@ -1,0 +1,369 @@
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+
+public class Factory {
+    
+    static Animator animator;
+    static Glob glob;
+    static Sprite laser;
+    
+    Factory() {
+        animator = Animator.o;
+        glob = Glob.o;
+        BufferedImage pre_laser = new BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = pre_laser.createGraphics();
+        g.setColor(Color.GREEN);
+        g.setStroke(new BasicStroke(5));
+        g.drawLine(50, 50, 100, 50);
+        g.setStroke(new BasicStroke(1));
+        laser = new Sprite(pre_laser, "", 0.5, 0.5, 0, 1., 1., 1,  0, "laser");
+        laser.PutDouble("aim_angle", Math.PI / 2);
+        laser.PutDouble("aim_velocity", 0.);
+        laser.PutDouble("timer", 0.);
+        for (int r : glob.foregrounds.keySet()) for (Sprite sprite : glob.foregrounds.get(r)) {
+            if (sprite.id.equals("alarm")) {
+                Sprite lase = laser.clone();
+                sprite.father = lase;
+                lase.x = sprite.x;
+                lase.y = sprite.y;
+            }
+        }
+    }
+    
+    void Move_card(Sprite item) {
+        item.PutInt("room", glob.room);
+        glob.PickBuff(item);
+    }
+    
+    void Move_medkit(Sprite item) {
+        glob.PickBuff(item);
+    }
+    
+    void Move_bandage(Sprite item) {
+        glob.PickBuff(item);
+    }
+    
+    void Move_spike(Sprite sprite) {
+        if (!sprite.Contains("px")) return;
+        if (!sprite.Contains("timer")) glob.astronomer.health = 0;
+    }
+    
+    void Move_transparent_retractable_spike_piston_2(Sprite sprite) {
+        if (sprite.Contains("px") && glob.astronomer.y < sprite.GetDouble("py") && !sprite.Contains("timer")) {
+            sprite.PutDouble("timer", 0.5);
+        }
+        if (sprite.Contains("timer")) {
+            sprite.AddDouble("timer", -glob.enemy_time);
+            if (sprite.GetDouble("timer") < 0) {
+                sprite.path = "../zodiac/Factory_Obstacles\\spikes.png";
+                sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path, 1., 1., 1);
+                sprite.scale_y *= 0.5;
+                sprite.y += 0.5 * sprite.scale_y * sprite.image.getHeight();
+                sprite.TouchCollider();
+                sprite.id = "spike";
+                sprite.Remove("timer");
+            }
+        }
+    }
+    
+    void Move_transparent_spike(Sprite sprite) {
+        if (!sprite.Contains("px")) return;
+        glob.astronomer.health = 0;
+    }
+    
+    void Move_button_400(Sprite sprite) {
+        if (!sprite.Contains("px")) return;
+        if (!sprite.Contains("pressed")) sprite.PutInt("pressed", 0);
+        if (sprite.GetInt("pressed") == 0) {
+            glob.astronomer.x = animator.width / 2;
+            glob.astronomer.y = animator.height / 2;
+            sprite.path = "../zodiac/Factory_Obstacles\\alarm_button_pressed.png";
+            sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path, 1., 1., 1);
+            sprite.y += 6;
+            sprite.PutInt("pressed", 1);
+            glob.room = 401;
+            glob.astronomer.PutInt("room", glob.room);
+        }
+    }
+    
+    void BorderPatrol(Sprite sprite, double h) {
+        if (sprite.image == null) sprite.Step();
+        double height = sprite.image.getHeight();
+        if (sprite.center_y != 0) {
+            sprite.center_x = sprite.image.getWidth() / 2;
+            sprite.center_y = 0.;
+            double x = sprite.x / animator.width;
+            double y = sprite.y / animator.height;
+            if (y - x > 0 && y + x > 1) {
+                sprite.x = animator.width / 2;
+                sprite.y = animator.height;
+                sprite.angle = Math.PI / 2;
+            } else if (y - x > 0 && y + x < 1) {
+                sprite.x = 0.;
+                sprite.y = animator.height / 2;
+                sprite.angle = 0.;
+            } else if (y - x < 0 && y + x > 1) {
+                sprite.x = animator.width;
+                sprite.y = animator.height / 2;
+                sprite.angle = Math.PI;
+            } else {
+                sprite.x = animator.width / 2;
+                sprite.y = 0.;
+                sprite.angle = -Math.PI / 2;
+            }
+        }
+        double x = sprite.x / animator.width;
+        double y = sprite.y / animator.height;
+        double xn = 0, yn = 0;
+        if (y - x > 0 && y + x > 1) {
+            sprite.x += h;
+            yn = -height;
+        } else if (y - x > 0 && y + x < 1) {
+            sprite.y += h;
+            xn = height;
+        } else if (y - x < 0 && y + x > 1) {
+            sprite.y -= h;
+            xn = -height;
+        } else {
+            sprite.x -= h;
+            yn = height;
+        }
+        xn += sprite.x;
+        yn += sprite.y;
+        xn = Math.min(Math.max(xn, height), animator.width - height);
+        yn = Math.min(Math.max(yn, height), animator.height - height);
+        xn -= sprite.x;
+        yn -= sprite.y;
+        sprite.angle = Animator.Angle(xn, -yn);
+    }
+    
+    void Room_401() {
+        for (Sprite obstacle : glob.FindSprites("rotating", glob.obstacles)) BorderPatrol(obstacle, 20 * glob.enemy_time);
+        if (glob.FindSprites("target", glob.foregrounds).size() > 0) return;
+        glob.astronomer.x = animator.width / 2;
+        glob.astronomer.y = animator.height - 250;
+        glob.room = 400;
+        glob.astronomer.PutInt("room", glob.room);
+        for (Sprite door : glob.FindSprites("door", glob.doors)) door.Remove("inactive");
+        for (Sprite alarm : glob.FindSprites("alarm", glob.foregrounds)) alarm.PutString("inactive", "");
+    }
+    
+    void Room_402() {
+        Sprite button_402 = glob.FindSprites("button_402", glob.obstacles).get(0);
+        for (Sprite ladder : glob.FindSprites("ladder", glob.climbables)) {
+            if (glob.astronomer.Collision(ladder) != null && button_402.GetInt("pressed") != 5) {
+                for (Sprite piston : glob.FindSprites("piston_1", glob.obstacles)) piston.Remove("inactive");
+                for (Sprite alarm : glob.FindSprites("alarm", glob.foregrounds)) alarm.Remove("inactive");
+                button_402.PutString("vulnerable", "");
+            }
+        }
+    }
+    
+    void Move_button_402(Sprite sprite) {
+        if (!sprite.Contains("pressed")) sprite.PutInt("pressed", 0);
+        if (sprite.Contains("pressed?")) {
+            sprite.Remove("pressed?");
+            if (sprite.Contains("vulnerable")) {
+                sprite.Remove("vulnerable");
+                sprite.AddInt("pressed", 1);
+                for (Sprite obstacle : glob.FindSprites("piston_1", glob.obstacles)) obstacle.PutString("inactive", "");
+                if (sprite.GetInt("pressed") == 2) {
+                    for (Sprite obstacle : glob.FindSprites("transparent_piston_2", glob.obstacles)) obstacle.Remove("inactive");
+                    for (Sprite obstacle : glob.FindSprites("transparent_retractable_spike_piston_2", glob.obstacles)) obstacle.Remove("inactive");
+                } else if (sprite.GetInt("pressed") == 3) {
+                    for (Sprite obstacle : glob.FindSprites("piston_3", glob.obstacles)) obstacle.PutString("inactive", "");
+                } else if (sprite.GetInt("pressed") == 4) {
+                    for (Sprite obstacle : glob.FindSprites("piston_4", glob.obstacles)) obstacle.PutString("inactive", "");
+                } else if (sprite.GetInt("pressed") == 5) {
+                    for (Sprite obstacle : glob.FindSprites("door", glob.doors)) obstacle.Remove("inactive");
+                    for (Sprite alarm : glob.FindSprites("alarm", glob.foregrounds)) alarm.PutString("inactive", "");
+                }
+            }
+        }
+        if (!sprite.Contains("px") || sprite.GetInt("pressed") > 0) return;
+        for (Sprite obstacle : glob.FindSprites("piston_1", glob.obstacles)) {
+            obstacle.PutString("inactive", "");
+            sprite.path = "../zodiac/Factory_Obstacles\\alarm_button_pressed.png";
+            sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path, 1., 1., 1);
+            sprite.y += 6;
+            sprite.PutInt("pressed", 1);
+        }
+    }
+    
+    public static Sprite Lase(Sprite laser, Sprite sprite, double target_height,  ArrayList<Sprite> targets,
+            double rotation_rate, double decay, double reaction_time, double sprite_range, double[] hit) {
+        double dx = sprite.x - laser.x;
+        double dy = sprite.y - target_height * sprite.scale_y * sprite.image.getHeight() - laser.y;
+        laser.angle = Animator.Angle(dx, -dy);
+        Sprite obs = Zap(laser, null, hit);
+        boolean see = obs == sprite;
+        double dif = 9e9;
+        if (see || (obs == null)) {
+            dif = (laser.angle - laser.GetDouble("aim_angle")) / (2 * Math.PI);
+            dif -= Math.floor(dif + 0.5);
+            laser.AddDouble("aim_velocity", rotation_rate * animator.frame_time * dif);
+        }
+        laser.AddDouble("aim_velocity", -Math.min(1., decay * animator.frame_time) * laser.GetDouble("aim_velocity"));
+        double h = animator.frame_time * laser.GetDouble("aim_velocity");
+        for (Sprite target : targets) {
+            dx = target.x - laser.x;
+            dy = target.y - laser.y;
+            double da = (laser.GetDouble("aim_angle") - Animator.Angle(dx, -dy)) / (2 * Math.PI);
+            da = (da - Math.floor(da + 0.5)) * 2 * Math.PI;
+            if (da * (da + h) < 0.) h = -da;
+        }
+        laser.AddDouble("aim_angle", h);
+        laser.angle = laser.GetDouble("aim_angle");
+        if (see) { laser.PutDouble("timer",
+                Math.min(2 * reaction_time, laser.GetDouble("timer") + animator.frame_time));
+        } else {
+            laser.PutDouble("timer",
+                Math.max(0., laser.GetDouble("timer") - animator.frame_time));
+        }
+        obs = Zap(laser, targets, hit);
+        if ((laser.GetDouble("timer") >= reaction_time) && (Math.abs(dif) < sprite_range)) {
+            animator.graphics.setStroke(new BasicStroke(7));
+            animator.graphics.setColor(Color.RED);
+            Sprite.DrawLine(laser.x, laser.y, hit[0], hit[1], null);
+            animator.Sound("../zodiac/Sounds\\ray_gun-Mike_Koenig-1169060422.wav", -20, 1., 1, "laser", 1, 0.3);
+            return obs;
+        }
+        animator.graphics.setStroke(new BasicStroke(1));
+        animator.graphics.setColor(
+                laser.GetDouble("timer") <= 0 ? Color.GREEN :
+                        (laser.GetDouble("timer") > 0.8 * reaction_time? Color.RED :
+                                see? Color.MAGENTA :Color.YELLOW));
+        Sprite.DrawLine(laser.x, laser.y, hit[0], hit[1], null);
+        return null;
+    }
+    
+    public static Sprite Zap(Sprite laser, ArrayList<Sprite> targets, double[] hit) {
+        double x = laser.x;
+        double y = laser.y;
+        double h = 800 * Math.max(animator.frame_time, 0.03);
+        laser.vx = h * Math.cos(laser.angle);
+        laser.vy = -h * Math.sin(laser.angle);
+        while (true) {
+            Point2D p = glob.astronomer.Collision(laser);
+            if (p != null) {
+                hit[0] = p.getX();  hit[1] = p.getY();
+                laser.x = x;  laser.y = y;
+                return glob.astronomer;
+            }
+            if (laser.x > glob.width || laser.y > glob.height || laser.x < 0 || laser.y < 0) {
+                hit[0] = laser.x;  hit[1] = laser.y;
+                laser.x = x;  laser.y = y;
+                return null;
+            }
+            if (targets != null) {
+                for (Sprite sprite : targets) {
+                    if ((sprite.GetInt("room") == glob.room)) {
+                        p = laser.Collision(sprite);
+                        if (p != null) {
+                            hit[0] = p.getX();  hit[1] = p.getY();
+                            laser.x = x;  laser.y = y;
+                            return sprite;
+                        }
+                    }
+                }
+            }
+            for (Sprite sprite : glob.GetSprites(glob.obstacles)) {
+                if (!sprite.Contains("inactive") && !sprite.id.startsWith("transparent")) {
+                    p = laser.Collision(sprite);
+                    if (p != null) {
+                        hit[0] = p.getX();  hit[1] = p.getY();
+                        laser.x = x;  laser.y = y;
+                        return sprite;
+                    }
+                }
+            }
+            laser.x += laser.vx;
+            laser.y += laser.vy;
+        }
+    }
+    
+    public static void Move_alarm(Sprite sprite) {
+        Sprite laser = sprite.father;
+        if (glob.prev_room != glob.room) laser.PutDouble("timer", 0.);
+        double[] hit = new double[2];
+        ArrayList<Sprite> targets = new ArrayList<>();
+        for (Sprite spr : glob.GetSprites(glob.obstacles)) {
+            if (spr.id.equals("button_402"))
+                targets.add(spr);
+        }
+        Sprite obs = Lase(laser, glob.astronomer, 0.3, targets, 7., 0.2, 2., 0.15, hit);
+        if ((obs == glob.astronomer) && glob.invins_frames == 0) {
+            Sprite buff = glob.buffs.get("card");
+            if (buff.partial <= 0.) {
+                glob.astronomer.health -= 2;
+            } else {
+                buff.partial = 0.;
+            }
+            glob.invins_frames = 2.5;
+        }
+        if (obs != null && obs.id.equals("button_402")) obs.PutString("pressed?", "");
+    }
+    
+    static boolean recenter = true;
+    public static void Move_turret(Sprite sprite) {
+        ArrayList<Sprite> electrical = glob.FindSprites("electrical", glob.foregrounds);
+        for (Sprite elec : electrical) if (elec.Contains("destroyed")) return;
+        if (recenter && sprite.image != null) {
+            sprite.Recenter(0.26, 0.53);
+            recenter = false;
+            sprite.PutDouble("bullet_timer", 0);
+        }
+        double al = 0.65 - Math.PI;
+        double ar = -0.2;
+        double[] hit = new double[2];
+        laser.x = sprite.x;
+        laser.y = sprite.y;
+        laser.angle = sprite.angle;
+        Sprite sprite_hit = Zap(laser, null, hit);
+        animator.graphics.setColor(Color.RED);
+        animator.graphics.drawLine((int)laser.x, (int)laser.y, (int)hit[0], (int)hit[1]);
+        ArrayList<Sprite> alarm_door = glob.FindSprites("alarm_door", glob.doors);
+        sprite.AddDouble("bullet_timer", -animator.frame_time);
+        if (sprite_hit == glob.astronomer) {
+            for (Sprite door : alarm_door) if (!door.Contains("inactive")) door.PutString("inactive", "");
+            double shoot = Animator.Angle(glob.astronomer.x - sprite.x, -glob.astronomer.y + sprite.y);
+            if (shoot > al && shoot < ar) sprite.angle = shoot;
+            if (sprite.GetDouble("bullet_timer") <= 0) {
+                sprite.PutDouble("bullet_timer", 0.5);
+                Sprite bullet = new Sprite(null, "../zodiac/Factory_Enemies/turret_bullet.png", 0.5, 0.5, 0, 0.25, 0.25, 1,  1, "turret_bullet");
+                bullet.x = sprite.x;
+                bullet.y = sprite.y;
+                bullet.angle = sprite.angle;
+                bullet.health = 9;
+                glob.AddGeneral(bullet, glob.enemies);
+            }
+        } else {
+            for (Sprite door : alarm_door) if (door.Contains("inactive")) door.Remove("inactive");
+            if (sprite.angle < al) {
+                sprite.vangle = 1.;
+            } else if (sprite.angle > ar) {
+                sprite.vangle = -1.;
+            } else {
+                sprite.vangle = sprite.vangle > 0.? 1. : -1.;
+            }
+            double aa = 0.002 + 0.05 * Math.abs((sprite.angle - al) * (sprite.angle - ar));
+            sprite.angle += sprite.vangle * aa;
+        }
+    }
+    
+    public static void Move_turret_bullet(Sprite sprite) {
+        sprite.x += Math.cos(sprite.angle) * 2500 * glob.enemy_time;
+        sprite.y -= Math.sin(sprite.angle) * 2500 * glob.enemy_time;
+        if (sprite.y > animator.height + 200) sprite.health = 0;
+        if (sprite.Collision(glob.astronomer) != null) {
+            sprite.health = 0;
+            glob.astronomer.health -= 1;
+        }
+    }
+    
+    
+}
