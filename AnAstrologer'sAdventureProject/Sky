@@ -1,0 +1,322 @@
+import MagicalForest.SoundWaves;
+import java.util.ArrayList;
+
+public class Sky {
+    
+    static Animator animator;
+    static Glob glob;
+    ArrayList<Rain> rains;
+    
+    Sky() {
+        animator = Animator.o;
+        glob = Glob.o;
+        rains = new ArrayList<>();
+        for (int r : glob.items.keySet()) for (Sprite item : glob.items.get(r)) {
+            if (item.id.equals("rain_cloud")) {
+                rains.add(new Rain());
+                item.PutInt("rain_number", rains.size() - 1);
+                item.PutDouble("mode", 0.);
+            }
+        }
+    }
+    
+    void Move_rain_cloud(Sprite sprite) {
+        if (sprite.Contains("rain_number"))
+            rains.get(sprite.GetInt("rain_number")).StepAndDraw(sprite);
+    }
+    
+    void Move_air_elemental(Sprite sprite) {
+        for (int i =0; i < 123; ++i) Animator.MyRand();
+        Forest.WanderingFlight(sprite, 0., 0., 0., false, 1.2, 0.5, 1., 1.5, 0., 300., 1000.);
+        if (!sprite.Contains("weakened")) sprite.y = Math.min(animator.height * 1 / 3, sprite.y);
+        if (!sprite.Contains("rigged_chances")) sprite.PutDouble("rigged_chances", 2);
+        ArrayList<Double> modes = new ArrayList<>();
+        ArrayList<Sprite> rain_clouds = glob.FindSprites("rain_cloud", glob.items);
+        for (Sprite cloud : rain_clouds) {
+            if (!cloud.Contains("mode")) cloud.PutDouble("mode", 0.);
+            double mode = cloud.GetDouble("mode");
+            if (mode != 0.) modes.add(mode);
+        }
+        if (modes.isEmpty() && sprite.Contains("electrical_overflow")) {
+            sprite.path = "../zodiac/Sky_Enemies\\air_elemental_weakened.png";
+            sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path,
+                    sprite.i_scale_x, sprite.i_scale_y, 1);
+            sprite.Remove("electrical_overflow");
+            sprite.PutString("weakened", "");
+            animator.Quiet("thunder");
+        } else if (!modes.isEmpty() && sprite.Contains("weakened")) {
+            sprite.path = "../zodiac/Sky_Enemies\\air_elemental.png";
+            sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path, 
+                    sprite.i_scale_x, sprite.i_scale_y, 1);
+            sprite.Remove("weakened");
+        }
+        for (SoundWaves sw : MagicalForest.soundwaves) {
+            double dx = 2 * (sw.x + sw.ex * 0.5 - sprite.x) / sw.ex;
+            double dy = 2 * (sw.y + sw.ey * 0.5 - sprite.y) / sw.ey;
+            double dc = 2 * sprite.image.getWidth() / sw.ex;
+            double d = Math.sqrt(dx * dx + dy * dy) - dc;
+            if (d < 1. && sprite.Contains("weakened")) {
+                sprite.health -= 1;
+                sw.alive = false;
+                sprite.Remove("weakened");
+                sprite.path = "../zodiac/Sky_Enemies\\air_elemental.png";
+                sprite.image = sprite.dimage = animator.ReadAndRescale(sprite.path, 
+                    sprite.i_scale_x, sprite.i_scale_y, 1);
+            }
+        }
+        double max_time = 0;
+        for (Rain rain : rains) {
+            max_time = Math.max(max_time, rain.time);
+        }
+        if (modes.isEmpty() && max_time > 8.5) {
+            for (Rain rain : rains) {
+                rain.time = 0;
+            }
+            int j = (int)(Animator.MyRand() * 2);
+            double mode = (int)(Animator.MyRand() * sprite.GetDouble("rigged_chances") + 1.5);
+            sprite.PutDouble("tell_counter", 0);
+            for (int i = 0; i < rain_clouds.size(); ++i) {
+                Sprite cloud = rain_clouds.get(i);
+                if (i == j && mode >= 3) {
+                    cloud.PutDouble("mode", 3);
+                    cloud.PutDouble("start", cloud.x);
+                    cloud.PutDouble("end", rain_clouds.get(1 - i).x);
+                    sprite.PutString("electrical_overflow", "");
+                    sprite.PutDouble("rigged_chances", 2);
+                } else if (mode >= 3) {
+                    cloud.PutDouble("mode", 3.5);
+                } else {
+                    sprite.AddDouble("rigged_chances", 1);
+                }
+            }
+            if (mode < 3) {
+                for (Sprite cloud : rain_clouds) {
+                    cloud.PutDouble("mode", mode);
+                }
+            }
+        }
+        boolean contains = false;
+        for (double mode : modes) {
+            if (mode == 3) contains = true;
+        }
+        if (contains) {
+            sprite.AddDouble("tell_counter", glob.enemy_time);
+            glob.tell.x = sprite.x + Glob.PiecewiseLinear(sprite.GetDouble("tell_counter"), 
+                    new double[]{0, 0.75, 1, 1.5}, new double[]{0, -25 * sprite.scale_x, -60 * sprite.scale_x, -60 * sprite.scale_x});
+            glob.tell.y = sprite.y + Glob.PiecewiseLinear(sprite.GetDouble("tell_counter"), 
+                    new double[]{0, 0.75, 1, 1.5}, new double[]{0, -60 * sprite.scale_y, -60 * sprite.scale_y, 40 * sprite.scale_y});
+            if (sprite.GetDouble("tell_counter") <= 1.5) glob.tell.StepAndDraw();
+            glob.tell.x = sprite.x + Glob.PiecewiseLinear(sprite.GetDouble("tell_counter"), 
+                    new double[]{0, 0.75, 1, 1.5}, new double[]{0, 25 * sprite.scale_x, 60 * sprite.scale_x, 60 * sprite.scale_x});
+            glob.tell.y = sprite.y + Glob.PiecewiseLinear(sprite.GetDouble("tell_counter"), 
+                    new double[]{0, 0.75, 1, 1.5}, new double[]{0, -82 * sprite.scale_y, -82 * sprite.scale_y, -20 * sprite.scale_y});
+            if (sprite.GetDouble("tell_counter") <= 1.5) {
+                glob.tell.StepAndDraw();
+            } else {
+                if (animator.Done("thunder")) animator.Sound("../zodiac/Sounds\\thunder.wav", -20, 1., 1, "thunder", 1, 1.);
+            }
+        }
+    }
+    
+    class Rain {
+        ArrayList<Sprite> drops;
+        Sprite lightning;
+        double time;
+        
+        Rain() {
+            drops = new ArrayList<>();
+            time = 0;
+        }
+        
+        void StepAndDraw(Sprite sprite) {
+            for (int i = drops.size() - 1; i >= 0; --i) {
+                Sprite drop = drops.get(i);
+                drop.x += drop.vx * glob.enemy_time;
+                drop.y += drop.vy * glob.enemy_time;
+                drop.StepAndDraw();
+                boolean remove = drop.y > animator.height + 75 || drop.y < -75 || drop.x > animator.width + 75 || drop.x < -75;
+                if (glob.astronomer.Collision(drop.x, drop.y) != null) {
+                    remove = true;
+                    if (drop.id.equals("icicle") && glob.invins_frames == 0) {
+                        glob.astronomer.health -= 1;
+                        glob.invins_frames = 1.5;
+                    }
+                }
+                if (remove) {
+                    drops.set(i, drops.get(drops.size() - 1));
+                    drops.remove(drops.size() - 1);
+                }
+            }
+            double c = 1.5;
+            double dx = Animator.MyRand() * sprite.image.getWidth() - sprite.image.getWidth() / 2;
+            double dy = sprite.image.getHeight() / 2;
+            double cos = Math.cos(sprite.angle);
+            double sin = -Math.sin(sprite.angle);
+            double x = dx * cos - dy * sin + sprite.x;
+            double y = dx * sin + dy * cos + sprite.y;
+            boolean ice = false;
+            double mode = sprite.GetDouble("mode");
+            time += glob.enemy_time;
+            if (mode == 0) {
+                Add_Drop(x, y, sprite.angle, -100 * sin, 100 * cos, ice);
+            } else if ( mode == 1) {
+                ice = true;
+                sprite.angle = Glob.PiecewiseLinear(time, new double[]{c, 2 + c, 4.68 + c, 6 + c}, new double[]{0, -0.4, 0.672, 0});
+                if (sprite.x > animator.width / 2) sprite.angle *= -1;
+                if (time > 6 + c) time = 0;
+                Add_Drop(x, y, sprite.angle, -100 * sin, 100 * cos, ice);
+            } else if (mode == 2) {
+                sprite.angle = Glob.PiecewiseLinear(time, 
+                        new double[]{c, 2 + c, 4 + c, 5 + c, 8 + c, 9 + c, 12 + c}, new double[]{0, -0.4, 0.4, 0.8, 0.8, 0.85, 0});
+                double h = Glob.PiecewiseConstant(time, 
+                        new double[]{c, 2 + c, 4 + c, 5 + c, 8 + c, 9 + c, 12 + c}, new double[]{1, 1, 0, 0, 1, 1, 1});
+                ice = h == 0? false : true;
+                if (sprite.x > animator.width / 2) sprite.angle *= -1;
+                if (time > 12 + c) time = 0;
+                Add_Drop(x, y, sprite.angle, -100 * sin, 100 * cos, ice);
+            } else if (mode == 3 || mode == 3.5) {
+                Factory.laser.x = -70 * sprite.scale_y * sin + sprite.x;
+                Factory.laser.y = 70 * sprite.scale_y * cos + sprite.y;
+                Factory.laser.angle = sprite.angle - Math.PI / 2;
+                double[] hit = new double[2];
+                Sprite zap = Factory.Zap(Factory.laser, new ArrayList<>(), hit);
+                double dlightningx = hit[0] - Factory.laser.x;
+                double dlightningy = hit[1] - Factory.laser.y;
+                double dlightning = Math.sqrt(dlightningx * dlightningx + dlightningy * dlightningy) / (0.3 * 715);
+                if (lightning == null) lightning = new Sprite(null, "../zodiac/Extras\\Lightning.png", 0.5, 0., 0, 0.3, 0.3, 1,  1, "lightning");
+                lightning.scale_x = 1;
+                lightning.scale_y = dlightning;
+                lightning.x = Factory.laser.x;
+                lightning.y = Factory.laser.y;
+                lightning.angle = sprite.angle;
+                ArrayList<Sprite> rain_clouds = glob.FindSprites("rain_cloud", glob.items);
+                int phase2 = (int)(Animator.MyRand() + 0.5);
+                boolean one = false;
+                boolean two = false;
+                int i = 0;
+                for (Sprite cloud : rain_clouds) {
+                    if (!cloud.Contains("phase2")) {
+                        if (i == 0) {
+                            one = false;
+                        } else {
+                            two = false;
+                        }
+                    } else {
+                        if (i == 0) {
+                            one = true;
+                        } else {
+                            two = true;
+                        }
+                    }
+                    ++i;
+                }
+                for (Sprite cloud : rain_clouds) {
+                    if (!cloud.Contains("phase2") && one == two) cloud.PutInt("phase2", phase2);
+                }
+                if (sprite.GetInt("phase2") == 0) {
+                    Name(sprite, mode, 11.75, 12.75, 10.75, c);
+                } else {
+                    Name(sprite, mode, 14, 15, 13, c);
+                }
+                if (sprite.GetInt("phase2") == 0 && time >= 5.5 + c) {
+                    lightning.scale_x = Glob.PiecewiseLinear(time, new double[]{5.5 + c, 6.5 + c, 10.75 + c, 11.75 + c}, new double[]{1, 5, 5, 1});
+                    double a = sprite.x < animator.width / 2? -0.4 : 0.4;
+                    double b = sprite.x < animator.width / 2? 1.2 : -1.2;
+                    sprite.angle = Glob.PiecewiseLinear(time, new double[]{6.5 + c, 7 + c, 9.5 + c, 9.75 + c, 10.75 + c}, new double[]{0, a, b, b, 0});
+                } else if (time >= 5.5 + c) {
+                    lightning.scale_x = Glob.PiecewiseLinear(time, new double[]{5.5 + c, 6.5 + c, 13 + c, 14 + c}, new double[]{1, 5, 5, 1});
+                    double a = sprite.x < animator.width / 2? 1.4 : -1.4;
+                    sprite.angle = Glob.PiecewiseLinear(time, new double[]{6.5 + c, 8 + c, 13 + c}, new double[]{0, a, 0});
+                }
+                if (sprite.GetInt("phase2") == 0) {
+                    Name2(sprite, lightning, mode, 11.75, 12.75, rain_clouds, zap, c);
+                } else {
+                    Name2(sprite, lightning, mode, 14, 15, rain_clouds, zap, c);
+                }
+            }
+            if (time == 0.) {
+                sprite.angle = 0;
+                sprite.PutDouble("mode", 0);
+            }
+        }
+        
+        void Add_Drop(double x, double y, double angle, double vx, double vy, boolean ice) {
+            Sprite drop;
+            if (ice) {
+                drop = new Sprite(null, "../zodiac/Extras\\Icicle.png", 0.5, 0.5, 0, 0.1, 0.1, 1,  1, "icicle");
+            } else {
+                drop = new Sprite(null, "../zodiac/Extras\\rain.png", 0.5, 0.5, 0, 0.02, 0.02, 1,  1, "drop");
+            }
+            drop.x = x;
+            drop.y = y;
+            drop.angle = angle;
+            drop.vx = vx;
+            drop.vy = vy;
+            drops.add(drop);
+        }
+        
+        void Name(Sprite sprite, double mode, double stay_time, double stay_time2, double shrink_time, double c) {
+            if (mode == 3) {
+                sprite.x = Glob.PiecewiseLinear(time, new double[]{c, 0.5 + c, 5.5 + c, stay_time + c, stay_time2 + c}, 
+                        new double[]{sprite.GetDouble("start"), 
+                            sprite.GetDouble("start") < animator.width / 2? 0 : animator.width,
+                            sprite.GetDouble("end"), sprite.GetDouble("end"), sprite.GetDouble("start")});
+                sprite.scale_x = sprite.scale_y = Glob.PiecewiseLinear(time, 
+                        new double[]{5.5 + c, 6.5 + c, shrink_time + c, stay_time + c}, new double[]{1, 1.5, 1.5, 1});
+            } else {
+                double a = sprite.x < animator.width / 2? -0.45 : 0.4;
+                sprite.angle = Glob.PiecewiseLinear(time, new double[]{c, 1.5 + c, 3.5 + c, 5 + c}, new double[]{0, a, a, 0});
+                sprite.scale_x = sprite.scale_y = Glob.PiecewiseLinear(time, 
+                        new double[]{5.5 + c, 6.5 + c, shrink_time + c, stay_time + c}, new double[]{1, 1.5, 1.5, 1});
+            }
+        }
+        
+        void Name2(Sprite sprite, Sprite lightning, double mode, double lightning_turn_off_time, double end_time, ArrayList<Sprite> rain_clouds, 
+                Sprite zap, double c) {
+            boolean light = false;
+            if (Glob.PiecewiseConstant(time, new double[]{0, c, 1.25 + c, 2 + c, 3.25 + c, 4 + c, 5.5 + c, lightning_turn_off_time + c}, 
+                    new double[]{0, 1, 0, 1, 0, 1, 0, 0}) == 1) {
+                lightning.StepAndDraw();
+                light = true;
+            } else if (mode == 3.5 && (sprite.GetInt("phase2") == 0 || time <= 6.5 + c || time >= 8 + c) && time <= lightning_turn_off_time + c 
+                    && time >= c) {
+                lightning.StepAndDraw();
+                light = true;
+            }
+            if (light && zap == glob.astronomer && glob.invins_frames == 0) {
+                glob.astronomer.health -= 2;
+                glob.invins_frames = 1.5;
+            }
+            if (time > end_time + c) {
+                time = 0;
+                sprite.Remove("phase2");
+                sprite.Remove("start");
+                sprite.Remove("end");
+            }
+        }
+    }
+    
+    void Move_leo_weak(Sprite sprite) {
+        for (SoundWaves sw : MagicalForest.soundwaves) {
+            double dx = 2 * (sw.x + sw.ex * 0.5 - sprite.x) / sw.ex;
+            double dy = 2 * (sw.y + sw.ey * 0.5 - sprite.y) / sw.ey;
+            double dc = 2 * sprite.image.getWidth() / sw.ex;
+            double d = Math.sqrt(dx * dx + dy * dy) - dc;
+            if (d < 1.) {
+                sprite.health = 0;
+                sw.alive = false;
+            }
+        }
+    }
+    
+    void Room_201() {
+        if (!glob.FindSprites("air_elemental", glob.enemies).isEmpty()) return;
+        for (Sprite door : glob.GetSprites(glob.doors)) door.Remove("inactive");        
+        for (Sprite item : glob.GetSprites(glob.items)) item.Remove("inactive");
+    }
+    
+    void Move_Libra(Sprite sprite) {
+        glob.PickCons(sprite);
+    }
+    
+}
