@@ -1,0 +1,98 @@
+public class Desert {
+    
+    static Animator animator;
+    static Glob glob;
+    
+    Desert() {
+        animator = Animator.o;
+        glob = Glob.o;
+    }
+    
+    void Move_fruit(Sprite item) {
+        if (glob.PickBuff(item)) animator.Sound("../zodiac/Sounds\\apple.wav", 0, 1., 1, "eat", 1, 1.);
+    }
+    
+    void Move_cacti(Sprite sprite) {
+        if (!sprite.Contains("px")) return;
+        if (glob.buffs.get("fruit").partial <= 0.) {
+            if (glob.invins_frames > 0) {
+                glob.invins_frames -= glob.astronomer_time;
+                glob.invins_frames = Math.max(glob.invins_frames, 0.);
+            } else {
+                glob.astronomer.health -= 0.5;
+                glob.invins_frames = 1.5;
+            }
+        }
+    }
+    
+    void Move_thorn_cactus(Sprite sprite) {
+        if (!sprite.Contains("awake")) sprite.PutInt("awake", 0);
+        int old_awake = sprite.GetInt("awake");
+        if (glob.astronomer.x < sprite.x - animator.width * 0.2) sprite.PutInt("awake", sprite.GetInt("awake") | 1);
+        if (glob.astronomer.x > sprite.x + animator.width * 0.2) sprite.PutInt("awake", sprite.GetInt("awake") | 2);
+        if (glob.HitChecker(sprite, 0.1, true)) {
+            animator.Sound("../zodiac/Sounds\\Cactus_Pain.wav", -5, 1., 1, "pain", 4, 1.);
+            sprite.PutInt("awake", 3);
+        }
+        sprite.PutDouble("old_health", sprite.health);
+        if (sprite.GetInt("awake") == 3) {
+            if (old_awake != sprite.GetInt("awake")) for (Sprite door : glob.GetSprites(glob.doors)) door.PutString("inactive", "");
+            sprite.x += glob.astronomer.x > sprite.x ? 140 * glob.enemy_time : -140 * glob.enemy_time;
+            if (!sprite.Contains("thorn_wait") || sprite.GetDouble("thorn_wait") == 0) {
+                sprite.PutDouble("thorn_wait", 3);
+                AddThorn(sprite, 75, -100);
+                AddThorn(sprite, 150, -150);
+                AddThorn(sprite, -75, -100);
+                AddThorn(sprite, -150, -150);
+            }
+            sprite.PutDouble("thorn_wait", Math.max(0, sprite.GetDouble("thorn_wait") - glob.enemy_time));
+        }
+        glob.EnemyLiftAstronomer(sprite, -1, 0);
+        if (sprite.Contains("py")) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+            sprite.PutInt("awake", 3);
+        }
+    }
+    
+    void AddThorn(Sprite sprite, double vx, double vy) {
+        Sprite thorn = new Sprite(null, "../zodiac/Desert_Enemies\\thorn.png", 0.5, 0.5, -Math.PI / 2, 0.15, 0.15, 1,  1, "Thorn");
+        thorn.PutInt("room", glob.room);
+        thorn.PutInt("collided", 0);
+        thorn.PutDouble("life_span", 10);
+        thorn.vx = vx;
+        thorn.vy = vy;
+        thorn.x = sprite.x;
+        thorn.y = sprite.y - 15;
+        thorn.health = 9e9;
+        thorn.extra_collision_mult = 1.;
+        glob.AddGeneral(thorn, glob.enemies);
+    }
+    
+    void Move_Thorn(Sprite sprite) {
+        if (sprite.GetInt("collided") == 0) {
+            sprite.vy += 200 * glob.gravity * glob.enemy_time;
+            sprite.x += sprite.vx * glob.enemy_time;
+            sprite.y += sprite.vy * glob.enemy_time;
+            for (Sprite obstacle : glob.GetSprites(glob.obstacles)) {
+                if (sprite.Collision(obstacle) != null) {
+                    sprite.PutInt("collided", 1);
+                }
+            }
+        }
+        glob.EnemyLiftAstronomer(sprite, -1, 0);
+        if (sprite.Contains("py")) {
+            glob.astronomer.health -= 0.5;
+            glob.invins_frames = 1.5;
+        }
+        sprite.AddDouble("life_span", -glob.enemy_time);
+        if (sprite.GetDouble("life_span") < 0) {
+            sprite.health = 0;
+        }
+    }
+    
+    void Room_501() {
+        if (glob.FindSprites("thorn_cactus", glob.enemies).isEmpty()) for (Sprite door : glob.GetSprites(glob.doors)) door.Remove("inactive");
+    }
+    
+}
