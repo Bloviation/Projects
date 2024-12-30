@@ -1,0 +1,1430 @@
+import com.sun.glass.events.KeyEvent;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.TreeMap;
+
+public class Glob {
+
+    public static void main(String[] args) {
+        new Glob();
+        animator = new Animator(Glob.o, 0, 0, "action", false);
+        animator.mouse3pop = false;
+        animator.Animate();
+    }
+    
+    static Animator animator;
+    public static Glob o;
+    boolean mouseTouched1, mousePressed1, mouseTyped1, mouseTyped3;
+    
+    final int[] starting_health = new int[]{25, 25, 25};
+    final double[] astronomer_velocity_factors = new double[]{1.25, 1.42, 1.6};
+    final double[] enemy_velocity_factors = new double[]{1.25, 1.42, 1.6};
+    final double mandatory_seconds_out = 5.;
+    
+    ArrayList<Object> biomes;
+    TreeMap<String, Integer> biomes_map;
+    Sprite astronomer, astronomer_base, prev_astronomer;
+    Sprite full_heart;
+    Sprite half_heart;
+    Sprite full_heart_poisoned;
+    Sprite half_heart_poisoned;
+    Sprite empty_heart;
+    Sprite air;
+    String tutorial_writing = null;
+    public TreeMap<Integer, ArrayList<Sprite>> obstacles, items, climbables,
+            enemies, mandatory_enemies, backgrounds, foregrounds, doors;
+    public TreeMap<String, Sprite> buffs, pause_buttons;
+    public ArrayList<Sprite> attacks;
+    BufferedImage astronomer_with_telescope, astronomer_no_telescope, astronomer_frog, astronomer_with_crown;
+    String astronomer_with_telescope_path, astronomer_no_telescope_path, astronomer_frog_path, astronomer_with_crown_path;
+    ZodiacDraw zodiacdraw;
+    Sprite background;
+    int width, height;
+    int last_file_number;
+    int room, prev_room;
+    int win_counter;
+    int difficulty;
+    double air_counter;
+    double ast_x, ast_y;
+    double invins_frames;
+    double gravity, jumpity, terminal;
+    double astronomer_time, enemy_time;
+    boolean paused, saving, quitting, dojoing, reloading;
+    ReadThread readThread;
+    String player_name = null, default_player_name = "";
+    Sprite tell;
+    boolean all = false;
+    Point2D mouse_point;
+    
+    Suit suit;
+    public class Suit {
+        public int room;
+        public TreeMap<Integer, Double> gravities;
+        public TreeMap<Integer, Double> jumpities;
+        public TreeMap<Integer, Double> terminals;
+        public int difficulty;
+        
+        public Suit() {
+            gravities = new TreeMap<>();
+            jumpities = new TreeMap<>();
+            terminals = new TreeMap<>();
+        }
+    }
+    
+    Glob() {
+        o = this;
+    }
+    
+    void Init_action() {
+        o = this;
+        animator = Animator.o;
+        Sprite.allow_flip = true;
+        width = animator.width;
+        height = animator.height;
+        animator.nokeys.add(KeyEvent.VK_ESCAPE);
+        animator.nokeys.add(KeyEvent.VK_SHIFT);
+        animator.nokeys.add(KeyEvent.VK_SPACE);
+        animator.SetCursor(0);
+        mouseTouched1 = mousePressed1 = mouseTyped3 = false;
+        
+        buffs = new TreeMap<>();
+        Sprite buff = new Sprite(null, "../zodiac/Extras/cactus_fruit_icon.png", 0.5, 0.5, 0, 1., 1., 1,  1, "fruit", false);
+        buff.PutString("tutorial", "              You found a cactus fruit!\nFor its duration you will not be harmed\nby cacti.");
+        buff.SetPartial(0., -0.1, null, 1.);
+        buffs.put("fruit", buff);
+        buff = new Sprite(null, "../zodiac/Extras/id_card_icon.png", 0.5, 0.5, 0, 1., 1., 1,  1, "card", false);
+        buff.PutString("tutorial", "You found a voice recorded diary and ID\nID: Maxwell Hammer\nThe laser's development is going\nsmoothly. "
+                + "It has learnt to not attack\nworkers (the card will protect you from 1\nlaser hit) and is close to perfection.\n"
+                + "Known weakness: the button.\nA quick test of the laser should be fine at\nthis point, 'AAAAAAAHHHHH!!!!!'");
+        buff.SetPartial(0., 0., null, 1.);
+        buffs.put("card", buff);
+        buff = new Sprite(null, "../zodiac/Extras/medkit_icon.png", 0.5, 0.5, 0, 1., 1., 1,  1, "medkit", false);
+        buff.PutString("tutorial", "                 You found a medkit!\nIf you use it by pressing 'c' then you will\nheal 5 hearts.");
+        buff.SetPartial(0., 0., null, 1.);
+        buffs.put("medkit", buff);
+        buff = new Sprite(null, "../zodiac/Extras/bandage_icon.png", 0.5, 0.5, 0, 1., 1., 1,  1, "bandage", false);
+        buff.PutString("tutorial", "               You found a bandage!\nIf you use it by pressing 'v' then you will\nheal 1 heart.");
+        buff.SetPartial(0., 0., null, 1.);
+        buffs.put("bandage", buff);
+        
+        full_heart = new Sprite(null, "../zodiac/Extras/full_heart.png", 0.5, 0.5, 0, 0.25, 0.25, 1,  1, "health", false);
+        half_heart = new Sprite(null, "../zodiac/Extras/half_heart.png", 0.5, 0.5, 0, 0.25, 0.25, 1,  1, "health", false);
+        empty_heart = new Sprite(null, "../zodiac/Extras/empty_heart.png", 0.5, 0.5, 0, 0.25, 0.25, 1,  1, "health", false);
+        full_heart_poisoned = new Sprite(null, "../zodiac/Extras/full_heart_poisoned.png", 0.5, 0.5, 0, 0.25, 0.25, 1,  1, "health", false);
+        half_heart_poisoned = new Sprite(null, "../zodiac/Extras/half_heart_poisoned.png", 0.5, 0.5, 0, 0.25, 0.25, 1,  1, "health", false);
+        air = new Sprite(null, "../zodiac/Extras/air_bubble.png", 0.5, 0.5, 0, 0.05, 0.05, 1,  1, "air");
+        tell = new Sprite(null, "../zodiac/Sky_Foregrounds\\lightning_effect.png", 0.5, 0.5, 0, 0.1, 0.1, 1,  1, "lightning_effect");
+        air_counter = 999;
+        AddAstronomer();
+        suit = new Suit();
+        room = prev_room = 0;
+        Extra_Init_action();
+        mouse_point = new Point2D.Double();
+        paused = saving = quitting = dojoing = reloading = false;
+    }
+        
+    void Extra_Init_action() {
+        if (readThread != null) readThread.interrupt();
+        RefineAstronomer();
+        obstacles = new TreeMap<>();
+        items = new TreeMap<>();
+        climbables = new TreeMap<>();
+        enemies = new TreeMap<>();
+        mandatory_enemies = new TreeMap<>();
+        backgrounds = new TreeMap<>();
+        foregrounds = new TreeMap<>();
+        doors = new TreeMap<>();
+        attacks = new ArrayList<>();
+        Read();
+        Sprite.allow_flip = true;
+        if ((player_name != null) && (last_file_number < 0)) room = suit.room;
+        // Loading in thread
+        readThread = new ReadThread();
+        readThread.start();
+        zodiacdraw = new ZodiacDraw(foregrounds.get(2));
+        win_counter = 0;
+        for (int r : items.keySet()) for (Sprite item : items.get(r)) if (item.id.equals("win_star")) ++win_counter;
+        for (int r : enemies.keySet()) for (Sprite enemy : enemies.get(r)) {
+            if (enemy.Contains("mand")) {
+                if (!mandatory_enemies.containsKey(r)) mandatory_enemies.put(r, new ArrayList<Sprite>());
+                mandatory_enemies.get(r).add(enemy.clone());
+                enemy.Remove("mand");
+            }
+        }
+        biomes = new ArrayList<>();
+        biomes.add(this);
+        biomes.add(new Forest());
+        biomes.add(new Sky());
+        biomes.add(new Ocean());
+        biomes.add(new Factory());
+        biomes.add(new Desert());
+        biomes.add(new Colosseum());
+        biomes.add(new MagicalForest());
+        biomes.add(new Mines());
+        biomes_map = new TreeMap<>();
+        for (int i = 0; i < biomes.size(); ++i) {
+            for (Method method : biomes.get(i).getClass().getDeclaredMethods()) {
+                if (method.getName().startsWith("Move_"))
+                    biomes_map.put(method.getName().substring(5), i);
+            }
+        }
+        for (int r : items.keySet()) for (Sprite sprite : items.get(r)) {
+            if (sprite.Contains("easy") && difficulty > 0) sprite.health = 0;
+            if (sprite.Contains("normal") && difficulty > 1) sprite.health = 0;
+        }
+    }
+    
+    public class ReadThread extends Thread {
+        public void run(){
+            Step(backgrounds);
+            Step(obstacles);
+            Step(climbables);
+            Step(items);
+            Step(enemies);
+            Step(foregrounds);
+            Step(doors);
+        }
+    }
+    
+    void Step(TreeMap<Integer, ArrayList<Sprite>> map) {
+        for (int r : map.keySet()) for (Sprite sprite : map.get(r)) sprite.Step();
+    }
+
+    void AddAstronomer() {
+        astronomer_with_telescope_path = "../zodiac/Extras/astronomer.png";
+        astronomer_no_telescope_path = "../zodiac/Extras/astronomer_no_telescope.png";
+        astronomer_frog_path = "../zodiac/Extras/hexed_frog.png";
+        astronomer_with_crown_path = "../zodiac/Extras/astronomer_with_crown.png";
+        astronomer = new Sprite(null, astronomer_with_telescope_path, 0.5, 0.7, 0, 0.2, 0.2, 1,  1, "Astronomer");
+        astronomer_with_telescope = astronomer.image;
+        astronomer_no_telescope = animator.ReadAndRescale(astronomer_no_telescope_path, 0.2, 0.2, 1);
+        astronomer_frog = animator.ReadAndRescale(astronomer_frog_path, 0.2, 0.2, 1);
+        astronomer_with_crown = animator.ReadAndRescale(astronomer_with_crown_path, 0.2, 0.2, 1);
+        astronomer.SetSmoothing(5, 5, 0);
+        ast_x = astronomer.x = width / 2;
+        ast_y = astronomer.y = height / 4;
+        astronomer.vy = 0;
+        astronomer.dist_flip = -5;
+        astronomer.extra_collision_mult = -0.2;
+        invins_frames = 0;
+        BufferedImage rect = new BufferedImage((int)(0.35 * astronomer.image.getWidth()),
+                (int)(0.6 * astronomer.image.getWidth()), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = rect.createGraphics();
+        g.setColor(Color.red);
+        g.fillRect(0, 0, rect.getWidth(), rect.getHeight());
+        astronomer_base = new Sprite(rect, "", 0.5, -0.3, 0, 1., 1., 1,  1, "AstronomerBase");
+    }
+    
+    void RefineAstronomer() {
+        astronomer.health = starting_health[difficulty];
+        astronomer.PutDouble("max_health", starting_health[difficulty]);
+        astronomer.PutDouble("max_stamina", 3);
+        astronomer.PutDouble("stamina", 3);
+        astronomer.PutDouble("poison", 0.);
+        astronomer.PutDouble("poison rate", 0.);
+        astronomer.PutInt("paralyzed", 0);
+    }
+    
+    void TopAstronomer() {
+        ast_x = astronomer.x = width / 2;
+        ast_y = astronomer.y = height / 4;
+        double h = 9e9;
+        for (Sprite door : GetSprites(doors)) {
+            if (door.y < h) {
+                h = door.y;
+                ast_x = astronomer.x = door.x + 0.05 * (width / 2 - door.x);
+                ast_y = astronomer.y = door.y + 0.05 * (height / 2 - door.y);
+            }
+        }
+    }
+    
+    void AddGeneral(Sprite sprite, TreeMap<Integer, ArrayList<Sprite>> sprites) {
+        if (!sprite.Contains("room")) sprite.PutInt("room", room);
+        if (sprite.health == 0.) sprite.health = 1.;
+        int key = sprite.GetInt("room");
+        if (!sprites.containsKey(key)) {
+            sprites.put(key, new ArrayList<>());
+        }
+        sprites.get(key).add(sprite);
+    }
+    
+    void AddBackground(Sprite sprite) {
+        if (!sprite.Contains("room")) sprite.PutInt("room", room);
+        ArrayList<Sprite> sps = new ArrayList<>();
+        sps.add(sprite);
+        backgrounds.put(sprite.GetInt("room"), sps);
+    }
+    
+    final double door_rat = 0.2;
+    final double door_shift = 50;
+    final double door_distance = 10;
+    
+    void AddDoor(Sprite sprite) {
+        if (!sprite.Contains("room")) sprite.PutInt("room", room);
+        if (sprite.image == null) sprite.Step();
+        sprite.dimage = sprite.image = Animator.Gemini(sprite.image);
+        sprite.scale_y = door_rat * Math.sqrt(sprite.scale_x);
+        AddGeneral(sprite, doors);
+    }
+    
+    void RoomSize() {
+        if ((backgrounds != null) && backgrounds.containsKey(room) &&
+                !backgrounds.get(room).isEmpty()) {
+            background = backgrounds.get(room).get(0);
+            background.Step();
+            width = background.image.getWidth();
+            height = background.image.getHeight();
+        }
+    }
+    
+    boolean HitChecker(Sprite sprite, double mindrop, boolean accumulate) {
+        return HitChecker(sprite, mindrop, accumulate, "old_health");
+    }
+    
+    boolean HitChecker(Sprite sprite, double mindrop, boolean accumulate, String oldy) {
+        if (!sprite.Contains(oldy)) sprite.PutDouble(oldy, sprite.health);
+        boolean hit = sprite.GetDouble(oldy) > sprite.health + mindrop;
+        if (!accumulate || hit) sprite.PutDouble(oldy, sprite.health);
+        return hit;
+    }
+    
+    void Foreground_action() {
+        // Into editor
+        if (animator.Typed(116)) {
+            GlobLevelEditor glle = new GlobLevelEditor();
+            glle.glob = this;
+            glle.Init_action();
+            animator.myclass = glle;
+            animator.modes = new String[] {"action"};
+            animator.Quiet("");
+            animator.SetKey(116);
+            return;
+        }
+        RoomSize();
+        if (animator.Typed(KeyEvent.VK_O)) all = !all;
+        if ((last_file_number >= 0) || (player_name != null)) all = false;
+        if (astronomer == null) {
+            Sprite.Tran(null, false);
+        } else {
+            astronomer.Tran(background, all, false, 10, 10, 0, 0);
+        }
+        if (all) {
+            mouse_point.setLocation(animator.mouse_point.x / Sprite.tran_scale_x,
+                    animator.mouse_point.y / Sprite.tran_scale_y);
+        } else {
+            mouse_point.setLocation(animator.mouse_point.x + Sprite.tran_x,
+                animator.mouse_point.y + Sprite.tran_y);
+        }
+        astronomer_time = (astronomer.image != astronomer_frog? 1. : 0.5) *
+                astronomer_velocity_factors[difficulty] * animator.frame_time;
+        enemy_time = enemy_velocity_factors[difficulty] * animator.frame_time;
+        gravity = 2.;
+        if (suit.gravities.containsKey(room)) gravity = suit.gravities.get(room);
+        jumpity = 1.;
+        if (suit.jumpities.containsKey(room)) jumpity = suit.jumpities.get(room);
+        terminal = 1.;
+        if (suit.terminals.containsKey(room)) terminal = suit.terminals.get(room);
+        mouseTouched1 = animator.MousePrePressed(1);
+        mousePressed1 = animator.MousePressed(1);
+        mouseTyped1 = animator.MouseTyped(1);
+        mouseTyped3 = animator.MouseTyped(3);
+        if (win_counter <= 0 && FindSprites("life", foregrounds).isEmpty()) {
+            Sprite sprite = new Sprite(null, "../zodiac/Extras\\win_scene.png", 0.5, 0.5, 0, 1.5, 1.5, 1,  1, "life");
+            sprite.x = astronomer.x;
+            sprite.y = astronomer.y;
+            sprite.PutString("back", "");
+            sprite.PutInt("room", room);
+            AddGeneral(sprite, foregrounds);
+            animator.Sound("../zodiac/Sounds\\Cheering 3-SoundBible.com-1680253418.wav", -10, 1., 1, "win", 1, 100.);
+        }
+        ArrayList<Sprite> obs = GetSprites(obstacles);
+        for (int i = 0; i < obs.size(); ++i) {
+            Sprite obstacle = obs.get(i);
+            obstacle.vx = obstacle.x;
+            obstacle.vy = obstacle.y;
+        }
+        Bury(GetSprites(foregrounds));
+        Bury(GetSprites(obstacles));
+        Bury(GetSprites(climbables));
+        Bury(GetSprites(items));
+        Bury(GetSprites(enemies));
+        Bury(GetSprites(doors));
+        if ((astronomer.father != null) && (astronomer.father.health <= 0.)) astronomer.father = null;
+        StepAndDraw(backgrounds, false);
+        StepAndDraw(foregrounds, true);
+        StepAndDraw(obstacles, false);
+        StepAndDraw(climbables, false);
+        StepAndDraw(items, false);
+        StepAndDraw(enemies, false);
+        StepAndDraw(foregrounds, false);
+        StepAndDraw(doors, false);
+        if (tutorial_writing != null) {
+            if (!paused) {
+                paused = true;
+                for (Sprite cons : ZodiacDraw.constellations.values()) cons.pause_partial = true;
+                for (Sprite buff : buffs.values()) buff.pause_partial = true;
+            }
+            Graphics2D g = animator.graphics;
+            g.setColor(Color.GRAY);
+            g.fillRect(500, 200, 1000, 700);
+            DrawString(tutorial_writing, 50, Color.WHITE, 510, 260, 65);
+            g.setColor(Color.RED);
+            Rectangle rect = new Rectangle(1325, 800, 175, 100);
+            g.fillRect(rect.x, rect.y, rect.width, rect.height);
+            DrawString("OK", 100, Color.WHITE, 1335, 885, 65);
+            Point2D orig_mouse_point = new Point2D.Double();;
+            orig_mouse_point.setLocation(animator.mouse_point.x, animator.mouse_point.y);
+            if (mouseTyped1 && rect.contains(orig_mouse_point)) {
+                tutorial_writing = null;
+                paused = false;
+                for (Sprite cons : ZodiacDraw.constellations.values()) cons.pause_partial = false;
+                for (Sprite buff : buffs.values()) buff.pause_partial = false;
+                zodiacdraw.Refresh();
+            }
+        }
+        if (animator.Typed(KeyEvent.VK_ESCAPE) && !paused && (room >= 100)) {
+            prev_room = room;
+            room = 1;
+            return;
+        }
+        if (astronomer.health <= 0 || win_counter == 0) {
+            AstronomerHealth();
+            astronomer.StepAndDraw();
+            StepAndDraw(foregrounds, false);
+            return;
+        }
+        if (room < 100) {
+            animator.Call("Room_" + String.valueOf(room));
+        } else {
+            animator.Call(biomes.get(room / 100), "Room_" + String.valueOf(room));
+            MagicalForest.ScorpionTailAction();
+        }
+        for (int i = attacks.size() - 1; i >= 0; --i) {
+            Sprite attack = attacks.get(i);
+            attack.StepAndDraw();
+            attack.Call(biomes.get(biomes_map.get(attack.id)), "Move_" + attack.id);
+            if (attack.health <= 0.) attacks.remove(i);
+        }
+        if (!astronomer.Contains("frog") && (room > 0) && (tutorial_writing == null) && !paused) {
+            zodiacdraw.Foreground(mousePressed1, mouseTouched1, mouseTyped3);
+            if (mousePressed1) ZodiacDraw.constellations.get("Sagittarius").partial = 0.;
+        }
+        boolean fpressed = animator.Typed(KeyEvent.VK_F);
+        if (fpressed) {
+            if ((ZodiacDraw.constellations.get("Sagittarius").partial > 0.) && astronomer.GetInt("paralyzed") == 0) {
+                Sprite arrow = new Sprite(null, "../zodiac/Extras\\centaur_arrow.png", 0.5, 0.5, 1.2 * Math.PI, 0.5, 0.5, 1,  1, "arrow");
+                arrow.x = astronomer.x;
+                arrow.y = astronomer.y;
+                animator.RecomputeMousePoint();
+                double dx = mouse_point.getX() - astronomer.x;
+                double dy = mouse_point.getY() - astronomer.y;
+                arrow.angle += Animator.Angle(dx, -dy);
+                attacks.add(arrow);
+                ZodiacDraw.constellations.get("Sagittarius").partial = 0.;
+            }
+        }
+        if (fpressed) {
+            if (ZodiacDraw.constellations.get("Leo").partial > 0) {
+                animator.Sound("../zodiac/Sounds\\Lion Roar-SoundBible.com-718441804.wav", 0., 1., 1, "roar", 1, 1);
+                MagicalForest.soundwaves.add(new MagicalForest.SoundWaves(500, 500, 500, 500, astronomer.x, astronomer.y, 1000));
+                ZodiacDraw.constellations.get("Leo").partial = 0;
+            }
+        }
+        if (ZodiacDraw.constellations.get("Libra").partial > 0) {
+            if (FindSprites("scale_piece1", foregrounds).isEmpty()) Colosseum.CreateScales(animator.mouse_point.x, animator.mouse_point.y);
+        } else {
+            Colosseum.KillScales();
+        }
+        if (fpressed && MagicalForest.scorpion_tail != null) MagicalForest.scorpion_tail.PutInt("pressed", 0);
+        if (animator.Pressed(KeyEvent.VK_F)) {
+            boolean no_water = false;
+            for (Sprite cons : ZodiacDraw.constellations.values()) if (!cons.id.equals("Cancer") && !cons.id.equals("Aquarius") && cons.partial > 0) {
+                no_water = true;
+            }
+            if (ZodiacDraw.constellations.get("Aquarius").partial > 0. && !no_water) {
+                ZodiacDraw.constellations.get("Aquarius").partial_velocity = -0.333;
+                Sprite water_drop = new Sprite(null, "../zodiac/Extras\\rain.png", 0.5, 0.5, -0.5 * Math.PI, 0.02, 0.02, 1,  1, "water_drop");
+                water_drop.x = astronomer.x;
+                water_drop.y = astronomer.y;
+                animator.RecomputeMousePoint();
+                double dx = mouse_point.getX() - astronomer.x;
+                double dy = mouse_point.getY() - astronomer.y;
+                water_drop.angle += Animator.Angle(dx, -dy);
+                water_drop.vx = 350 * Math.cos(water_drop.angle);
+                water_drop.vy = -350 * Math.sin(water_drop.angle);
+                attacks.add(water_drop);
+            }
+        } else {
+            ZodiacDraw.constellations.get("Aquarius").partial_velocity = -0.033;
+        }
+        if (animator.Typed(KeyEvent.VK_C)) {
+            if (buffs.get("medkit").partial > 0 && astronomer.health < astronomer.GetDouble("max_health") && 
+                    astronomer.GetInt("paralyzed") == 0) {
+                astronomer.health = Math.min(astronomer.GetDouble("max_health"), astronomer.health + 5);
+                buffs.get("medkit").partial = 0;
+            }
+        }
+        if (animator.Typed(KeyEvent.VK_V)) {
+            if (buffs.get("bandage").partial > 0 && astronomer.health < astronomer.GetDouble("max_health") && 
+                    astronomer.GetInt("paralyzed") == 0) {
+                astronomer.health = Math.min(astronomer.GetDouble("max_health"), astronomer.health + 1);
+                buffs.get("bandage").partial = 0;
+            }
+        }
+        if (room > 1) {
+            astronomer.Step();
+            Move_Astronomer();
+            AstronomerHealth();
+            if (invins_frames > 0) {
+                double h = animator.total_time * 5;
+                h -= Math.floor(h);
+                if ((h > 0.2) && (tutorial_writing == null)) astronomer.Draw();
+            } else {
+                if (tutorial_writing == null) astronomer.Draw();
+            }
+            astronomer_base.Step();
+            //astronomer_base.Draw();
+        }
+        StepAndDraw(foregrounds, false);
+        for (Sprite mandatory_enemy : GetSprites(mandatory_enemies)) {
+            if (!mandatory_enemy.Contains("timer")) mandatory_enemy.PutDouble("timer", mandatory_enemy.GetDouble("mand"));
+            ArrayList<Sprite> ens = FindSprites(mandatory_enemy.id, enemies);
+            for (Sprite enemy : ens) {
+                if ((enemy.x >= 0) && (enemy.x < width) &&
+                        (enemy.y >= 0) && (enemy.y < height)) {
+                    enemy.PutDouble("timer", mandatory_seconds_out);
+                } else {
+                    if (!paused) enemy.AddDouble("timer", -enemy_time);
+                    if (enemy.GetDouble("timer") < 0.) enemy.health = 0.;
+                }
+            }
+            if (ens.isEmpty()) {
+                if (!paused) mandatory_enemy.AddDouble("timer", -enemy_time);
+                if (mandatory_enemy.GetDouble("timer") < 0) {
+                    mandatory_enemy.PutDouble("timer", mandatory_enemy.GetDouble("mand"));
+                    Sprite enemy = mandatory_enemy.clone();
+                    enemy.Remove("mand");
+                    enemy.PutString("spawn", "");
+                    AddGeneral(enemy, enemies);
+                }
+            }
+        }
+        TimeBuffs(ZodiacDraw.constellations, 0, 0);
+        TimeBuffs(buffs, animator.width - 475, 40);
+        GoThroughDoors();
+        if (room >= 100) prev_room = room;
+        for (int i = MagicalForest.soundwaves.size() - 1; i >= 0; --i) {
+            MagicalForest.soundwaves.get(i).StepAndDraw();
+            if (!MagicalForest.soundwaves.get(i).alive) MagicalForest.soundwaves.remove(i);
+        }
+        for (Sprite enemy : GetSprites(enemies)) {
+            if (enemy.Contains("poison")) {
+                enemy.AddDouble("poison", -enemy.GetDouble("poison_rate") * enemy_time);
+                double poison_v = 1;
+                if (enemy.Contains("poison_v")) poison_v = enemy.GetDouble("poison_v");
+                enemy.health -= enemy.GetDouble("poison_rate") * enemy_time * poison_v;
+                if (enemy.GetDouble("poison") <= 0) {
+                    enemy.Remove("poison");
+                    enemy.Remove("poison_rate");
+                }
+            }
+        }
+    }
+    
+    void Bury(ArrayList<Sprite> sprites) {
+        for (int i = sprites.size() - 1; i >= 0; --i) {
+            Sprite sprite = sprites.get(i);
+            if ((sprite.father != null) && (sprite.father.health <= 0.)) sprite.health = 0.;
+            if (sprite.health <= 0.) sprites.remove(i);
+        }
+    }
+    
+    void StepAndDraw(TreeMap<Integer, ArrayList<Sprite>> sprites, boolean back) {
+        if (!sprites.containsKey(room)) return;
+        ArrayList<Sprite> sps = sprites.get(room);
+        for (int i = 0; i < sps.size(); ++i) {
+            Sprite sprite = sps.get(i);
+            if (sprite.partial <= 0.) sprite.PutString("inactive", "");
+            if (!sprite.Contains("inactive") && (sprite.Contains("back") == back) &&
+                (!sprite.id.equals("door") || (sprite.next_sprite != null))) {
+                if (!paused && biomes_map.containsKey(sprite.id)) {
+                    sprite.Call(biomes.get(biomes_map.get(sprite.id)), "Move_" + sprite.id);
+                }
+                if (sprite.Contains("nodraw")) {
+                    sprite.Step();
+                } else {
+                    sprite.StepAndDraw();
+                }
+            }
+        }
+    }
+    
+    ArrayList<Sprite> GetSprites(TreeMap<Integer, ArrayList<Sprite>> sprites) {
+        if (!sprites.containsKey(room)) return new ArrayList<>();
+        return sprites.get(room);
+    }
+    
+    ArrayList<Sprite> FindSprites(String id, TreeMap<Integer, ArrayList<Sprite>> sprites) {
+        ArrayList<Sprite> output = new ArrayList<>();
+        ArrayList<Sprite> sps = GetSprites(sprites);
+        for (Sprite sprite : sps) if (sprite.id.equals(id)) output.add(sprite);
+        return output;
+    }
+    
+    void ChangeRoom(Sprite sprite, int new_room, TreeMap<Integer, ArrayList<Sprite>> sprites) {
+        int current_room = sprite.GetInt("room");
+        if (current_room == new_room) return;
+        ArrayList<Sprite> arr = sprites.get(current_room);
+        for (int i = arr.size() - 1; i >= 0; --i) {
+            if (arr.get(i) == sprite) arr.remove(i);
+        }
+        sprite.PutInt("room", new_room);
+        if (!sprites.containsKey(new_room)) sprites.put(new_room, new ArrayList<>());
+        sprites.get(new_room).add(sprite);
+    }
+    
+    void DrawString(String str, int size, Color col, int x, int y, int h) {
+        Graphics2D g = animator.graphics;
+        Font tr = new Font("Helvetica", Font.BOLD, size);
+        g.setFont(tr);
+        g.setColor(col);
+        String[] sts = str.split("\n");
+        for (int i = 0; i < sts.length; ++i) {
+            g.drawString(sts[i], x, y + i * h);
+        }
+    }
+    
+    void Room_0() {
+        Graphics2D g = animator.graphics;
+        Font tr = new Font("Helvetica", Font.BOLD, 80);
+        g.setFont(tr);
+        FontMetrics fm = g.getFontMetrics();
+        int h = height;
+        String str = "My name is ";
+        int sx = (int)(0.2 * h);
+        int sy = (int)(0.45 * h);
+        g.setColor(Color.yellow);
+        g.drawString(str, sx, sy);
+        if ((animator.textArea == null) && (default_player_name != null)) {
+            animator.SetTextArea(new Rectangle(sx + fm.stringWidth(str),
+                    (int)(sy - 0.75 * fm.getHeight()), 400, fm.getHeight()),
+                    default_player_name, tr);
+        }
+        sy = (int)(0.53 * h);
+        int[] sd = new int[5];
+        g.setColor(Color.YELLOW);
+        str = "My game is ";
+        g.drawString(str, sx, sy);
+        sd[0] = sx + fm.stringWidth(str);
+        String[] dif_str = {" easy ", " normal ", " hard "};
+        for (int i = 0; i < 3; ++i) {
+            g.setColor(Color.magenta);
+            if (i == difficulty) {
+                g.setColor(Color.green);
+            }
+            g.drawString(dif_str[i], sd[i], sy);
+            sd[i + 1] = sd[i] + fm.stringWidth(dif_str[i]);
+            if (mouseTouched1 && animator.mouse_point.x >= sd[i] &&
+                    animator.mouse_point.x < sd[i + 1] &&
+                    animator.mouse_point.y >= sy - 0.75 * fm.getHeight() &&
+                    animator.mouse_point.y < sy + 0.25 * fm.getHeight()) {
+                difficulty = i;
+            }
+        }
+        suit.difficulty = difficulty;
+        sy = (int)(0.61 * h);
+        g.setColor(Color.red);
+        str = "Play";
+        g.drawString(str, sx, sy);
+        if (mouseTouched1 && animator.mouse_point.x >= sx &&
+                    animator.mouse_point.x < sx + fm.stringWidth(str) &&
+                    animator.mouse_point.y >= sy - 0.75 * fm.getHeight() &&
+                    animator.mouse_point.y < sy + 0.25 * fm.getHeight() && difficulty >= 0) {
+            zodiacdraw.Refresh();
+            player_name = animator.text;
+            animator.CancelTextArea();
+            if (player_name != null) {
+                player_name = player_name.replace(' ', '_');
+                if (player_name.isEmpty() || !Animator.isAsciiP(player_name)) player_name = null;
+            }
+            Extra_Init_action();
+            //room = last_file_number < 0 ? 3 : 1;
+            room = 1;
+        }
+    }
+    
+    void Room_1() {
+        if (!paused) {
+            paused = true;
+            prev_astronomer = astronomer;
+            for (Sprite cons : ZodiacDraw.constellations.values()) cons.PutDouble("prev_partial", cons.partial);
+            for (Sprite buff : buffs.values()) buff.PutDouble("prev_partial", buff.partial);
+            pause_buttons = new TreeMap<>();
+            for (Sprite button : GetSprites(foregrounds)) {
+                if (button.id.equals("continue") || button.id.equals("save") ||
+                        button.id.equals("save&quit") || button.id.equals("quit") || button.id.equals("enemies_nearby") ||
+                        button.id.equals("reload") || button.id.equals("loading")) {
+                    button.Remove("inactive");
+                    pause_buttons.put(button.id, button);
+                }
+            }
+            pause_buttons.get("enemies_nearby").PutString("inactive", "");
+            pause_buttons.get("loading").PutString("inactive", "");
+        }
+        if (saving) {
+            suit.room = prev_room;
+            suit.difficulty = difficulty;
+            String all = SaveToString(true);
+            Animator.WriteString(null, "zodiac/Grasslands_Data/data__" + player_name, all);
+        }
+        if (dojoing) {
+            GoDojo();
+        }
+        if (quitting) {
+            animator.nokeys.remove(KeyEvent.VK_ESCAPE);
+            animator.SetKey(KeyEvent.VK_ESCAPE);
+        }
+        if (reloading) {
+            Init_action();
+            return;
+        }
+        boolean enemies_nearby = enemies.containsKey(prev_room) && !enemies.get(prev_room).isEmpty();
+        if (enemies_nearby) {
+            pause_buttons.get("enemies_nearby").Remove("inactive");
+        }
+        boolean saveable = (prev_room >= 100) && (player_name != null) && !enemies_nearby;
+        if (!saveable) {
+            pause_buttons.get("save").PutString("inactive", "");
+            pause_buttons.get("save&quit").PutString("inactive", "");
+        }
+        double x = animator.mouse_point.x;
+        double y = animator.mouse_point.y;
+        if (mouseTyped1) {
+            if (pause_buttons.get("continue").RectCollision(x, y) != null) {
+                dojoing = true;
+            } else if (saveable && (pause_buttons.get("save").RectCollision(x, y) != null)) {
+                saving = dojoing = true;
+            } else if (saveable && (pause_buttons.get("save&quit").RectCollision(x, y) != null)) {
+                saving = quitting = true;
+            } else if (pause_buttons.get("quit").RectCollision(x, y) != null) {
+                quitting = true;
+            } else if (pause_buttons.get("reload").RectCollision(x, y) != null) {
+                reloading = true;
+            }
+            if (saving || reloading) {
+                for (Sprite button : pause_buttons.values()) button.PutString("inactive", "");
+                pause_buttons.get("loading").Remove("inactive");
+            }
+        }
+        zodiacdraw.Refresh();
+    }
+    
+    void GoDojo() {
+        if (pause_buttons != null) {
+            for (Sprite button : pause_buttons.values()) button.Remove("inactive");
+        }
+        paused = saving = quitting = dojoing = reloading = false;
+        astronomer = astronomer.clone();
+        astronomer.x = 0.5 * animator.width;
+        astronomer.y = 0.75 * animator.height;
+        room = 2;
+    }
+    
+    void Room_2() {
+        if (animator.MouseTyped(2)) {
+            for (Sprite sprite : GetSprites(foregrounds)) {
+                if (!sprite.Contains("inactive") && sprite.Collision(animator.mouse_point.x, animator.mouse_point.y) != null) {
+                    if (buffs.containsKey(sprite.id)) {
+                        tutorial_writing = buffs.get(sprite.id).GetString("tutorial");
+                    } else {
+                        tutorial_writing = ZodiacDraw.constellations.get(sprite.id).GetString("tutorial");
+                    }
+                }
+            }
+        }
+    }
+    
+    void Room_3() {
+        room = 100;
+        if (last_file_number < 0) room = suit.room = Math.max(room, suit.room);
+        if (prev_astronomer != null) astronomer = prev_astronomer;
+        if ((prev_astronomer != null) && (prev_room >= 100)) {
+            room = prev_room;
+            ast_x = astronomer.x;
+            ast_y = astronomer.y;
+            for (Sprite cons : ZodiacDraw.constellations.values()) {
+                if (cons.Contains("prev_partial")) {
+                    cons.partial = cons.GetDouble("prev_partial");
+                    cons.Remove("prev_partial");
+                }
+            }
+            for (Sprite buff : buffs.values()) {
+                if (buff.Contains("prev_partial")) {
+                    buff.partial = buff.GetDouble("prev_partial");
+                    buff.Remove("prev_partial");
+                }
+            }
+            RoomSize();
+        } else if (last_file_number != -1) {
+            RoomSize();
+            TopAstronomer();
+        }
+        invins_frames = 2.;
+        paused = true;
+        zodiacdraw.Refresh();
+    }
+    
+    // Can not save in this room
+    void Move_no_save(Sprite sprite) {
+        sprite.x = -1000;
+        sprite.y = -1000;
+    }
+    
+    Point2D Terrain(Sprite sprite, boolean info) {
+        Point2D pd = null;
+        for (Sprite obstacle : GetSprites(obstacles)) {
+            if (obstacle.Contains("inactive")) continue;
+            Point2D p = sprite.Collision(obstacle);
+            if ((p != null) && ((pd == null) || (pd.getY() < p.getY()))) pd = p;
+            if (info) {
+                if (p != null) {
+                    obstacle.PutDouble("px", p.getX());
+                    obstacle.PutDouble("py", p.getY());
+                } else {
+                    obstacle.Remove("px");
+                    obstacle.Remove("py");
+                }
+            }
+        }
+        return pd;
+    }
+    
+    void TerrainMove(Sprite sprite, Sprite base,
+            boolean left, boolean right, boolean down, boolean up, boolean climbing,
+            double velocity, double sprint_velocity, double acceleration,
+            double jump_velocity, double terminal_velocity,
+            double frame_time, int ntries, double jump_upper, double float_upper,
+            double down_pedestal, double up_pedestal, double jump_fudge,
+            double repulsion, boolean info) {
+        Point2D pd = Terrain(sprite, info);
+        boolean rush = sprite.Contains("rush");
+        if ((pd != null) && !rush) sprite.vy = 0.;
+        boolean boot = (pd != null) && (pd.getY() > sprite.y) &&
+                (Animator.MyRand()< 0.2 * frame_time? true : (Terrain(base, false) != null));
+        if (boot) {
+            sprite.vy = 0.;
+            sprite.PutDouble("boot", animator.total_time);
+        } else {
+            sprite.vx = 0;
+        }
+        boot = boot || (sprite.Contains("boot") &&
+                (sprite.GetDouble("boot") + jump_fudge > animator.total_time));
+        if (boot && (pd != null) && !rush) {
+            double dx = sprite.x - pd.getX();
+            double dy = sprite.y - pd.getY();
+            double z = repulsion / (dx * dx + dy * dy + 1);
+            double sy = sprite.y;
+            for (int t = 0; t < ntries; ++t) {
+                sprite.y += z * dy;
+                pd= Terrain(sprite, false);
+                if (pd == null) break;
+            }
+            if (pd != null) {
+                sprite.x += z * dx;
+                sprite.y = sy + z * dy;
+                pd = Terrain(sprite, false);
+            }
+        }
+        if ((pd == null) || rush) {
+            sprite.PutDouble("x", sprite.x);
+            sprite.PutDouble("y", sprite.y);
+            sprite.PutDouble("angle", sprite.angle);
+            sprite.PutDouble("scale_x", sprite.scale_x);
+            sprite.PutDouble("scale_y", sprite.scale_y);
+        } else if (sprite.Contains("x")) {
+            sprite.x = sprite.GetDouble("x");
+            sprite.y = sprite.GetDouble("y");
+            sprite.angle = sprite.GetDouble("angle");
+            sprite.scale_x = sprite.GetDouble("scale_x");
+            sprite.scale_y = sprite.GetDouble("scale_y");
+        }
+        boolean use_stamina = false;
+        if (left) {
+            if (sprite.vx > 0) {
+                sprite.vx = 0;
+            } else {
+                sprite.vx = Math.min(sprite.vx, -velocity);
+                if (animator.Pressed(KeyEvent.VK_SHIFT) && astronomer.GetDouble("stamina") > 0 && boot) {
+                    use_stamina = true;
+                    sprite.vx -= acceleration * frame_time;
+                }
+                sprite.vx = Math.max(sprite.vx, -sprint_velocity);
+            }
+        } else if (right) {
+            if (sprite.vx < 0) {
+                sprite.vx = 0;
+            } else {
+                sprite.vx = Math.max(sprite.vx, velocity);
+                if (animator.Pressed(KeyEvent.VK_SHIFT) && astronomer.GetDouble("stamina") > 0 && boot) {
+                    use_stamina = true;
+                    sprite.vx += acceleration * frame_time;
+                }
+                sprite.vx = Math.min(sprite.vx, sprint_velocity);
+            }
+        }
+        if (use_stamina) {
+            astronomer.AddDouble("stamina", -frame_time);
+        } else if (left || right) {
+            astronomer.AddDouble("stamina", 0.3 * frame_time);
+        } else if (!up) {
+            astronomer.AddDouble("stamina", 0.5 * frame_time);
+        }
+        astronomer.PutDouble("stamina", Math.min(astronomer.GetDouble("stamina"),
+                astronomer.GetDouble("max_stamina")));
+        sprite.x += sprite.vx * frame_time;
+        double v = velocity * frame_time;
+        if (climbing) {
+            sprite.vy = 0.;
+            if (down) sprite.y += v;
+            if (up) sprite.y -= v;
+        } else {
+            if (down && sprite.Contains("touched")) {
+                sprite.y += down_pedestal;
+            }
+            sprite.vy += 200 * gravity * frame_time /
+                    (up? (sprite.vy > 0. ? float_upper : jump_upper) : 1.);
+            if (boot && up) {
+                sprite.Remove("boot");
+                sprite.y -= up_pedestal;
+                sprite.vy = -jump_velocity;
+                ZodiacDraw.constellations.get("Cancer").partial = 0;
+                Colosseum.crab_shell.health = 0;
+            }
+            sprite.vy = Math.min(sprite.vy, terminal_velocity / (up? float_upper : 1.));
+            sprite.y += sprite.vy * frame_time;
+        }
+        sprite.x = Math.max(0, Math.min(width, sprite.x));
+        sprite.y = Math.max(0, sprite.y);
+    }
+    
+    boolean InWater(double x, double y) {
+        return ((room == 300) && (y > 0.76 * height)) || (room == 301);
+    }
+    
+    boolean AquaBenefit() {
+        return ZodiacDraw.constellations.get("Aquarius").partial > 0.;
+    }
+    
+    void EnemyLiftAstronomer(Sprite enemy, double sit, double lift) {
+        EnemyLiftAstronomer(enemy, sit, lift, 0, -9.);
+    }
+    
+    void EnemyLiftAstronomer(Sprite enemy, double sit, double lift, double side, double req) {
+        enemy.Remove("px");
+        enemy.Remove("py");
+        Point2D p = astronomer.Collision(enemy);
+        if (p == null) return;
+        astronomer.PutString("touched", "");
+        if (invins_frames == 0) {
+            enemy.PutDouble("px", p.getX());
+            enemy.PutDouble("py", p.getY());
+        }
+        double sider = enemy.scale_x * enemy.scale_y > 0. ? side : -side;
+        if (((Math.abs(enemy.x + sider * enemy.image.getWidth() - astronomer.x) < sit * enemy.image.getWidth()) &&
+                (astronomer.y < p.getY() - req * Math.abs(astronomer.scale_y) * astronomer.image.getHeight()))) {
+            astronomer.vy = 0;
+            astronomer.y -= lift * Animator.MyRand() * astronomer.image.getHeight() *
+                    astronomer_time * astronomer_velocity_factors[difficulty];
+        }
+    }
+    
+    void Move_Astronomer() {
+        if (astronomer.GetInt("paralyzed") == 1) return;
+        if (paused) return;
+        boolean climbing = false;
+        for (Sprite climbable: GetSprites(climbables)) {
+            if (astronomer.Collision(climbable) != null) {
+                climbing = true;
+                break;
+            }
+        }
+        boolean inwater = InWater(astronomer.x, astronomer.y - 0.3 * astronomer.image.getHeight());
+        boolean bon = inwater && AquaBenefit();
+        if (room == 3) bon = inwater = true;
+        TerrainMove(astronomer, astronomer_base,
+                animator.Pressed(KeyEvent.VK_A), animator.Pressed(KeyEvent.VK_D),
+                animator.Pressed(KeyEvent.VK_S), animator.Pressed(KeyEvent.VK_W),
+                climbing || inwater, bon? 300. : (inwater? 100 : 175.),
+                525., 2000, 150. * jumpity, 500. * terminal, astronomer_time,
+                4, 3., 1.8, 40., 10., 0.2, 400, true);
+        if (astronomer.image != astronomer_frog) {
+            astronomer.Recenter(0.5, 0.7);
+            astronomer_base.Recenter(0.5, -0.3);
+        } else {
+            astronomer.Recenter(0.5, 0.5);
+            astronomer_base.Recenter(0.5, -0.3);
+        }
+        astronomer_base.x = astronomer.x;
+        astronomer_base.y = astronomer.y;
+        astronomer_base.scale_x = astronomer.scale_x;
+        astronomer_base.scale_y = astronomer.scale_y;
+        astronomer.Remove("touched");
+        ArrayList<Sprite> its = GetSprites(items);
+        for (int i = its.size() - 1; i >= 0; --i) {
+            Sprite item = its.get(i);
+            if (!item.Contains("inactive")) {
+                Point2D p = astronomer.Collision(item);
+                if (p != null) {
+                    item.PutDouble("px", p.getX());
+                    item.PutDouble("py", p.getY());
+                } else {
+                    item.Remove("px");
+                    item.Remove("py");
+                }
+            }
+        }
+        if (astronomer.Contains("frog")) {
+            astronomer.AddDouble("frog", -astronomer_time);
+            if (astronomer.GetDouble("frog") < 0) {
+                astronomer.Remove("frog");
+                astronomer.path = astronomer_with_telescope_path;
+                astronomer.image = astronomer.dimage = astronomer_with_telescope;
+            }
+        }
+        if ((room >= 100) && (astronomer.y > height * 1.2)) astronomer.health = 0;
+    }
+    
+    void AstronomerHealth() {
+        if (astronomer.health <= 0) {
+            astronomer.health -= astronomer_time * 10;
+            astronomer.angle = Math.min(Math.PI * 0.5, astronomer.angle + astronomer_time);
+            animator.Sound("../zodiac/Sounds\\Scary Scream-SoundBible.com-1115384336.wav", 5., 1., 1, "death", 1, 9e5);
+            if (astronomer.health < -40) {
+                animator.Sound("../zodiac/Sounds\\Goodbye-SoundBible.com-1660461090.wav", 5., 1., 1, "goodbye", 1, 9e5);
+            }
+            return;
+        }
+        if (invins_frames > 0.) {
+            invins_frames -= animator.frame_time;
+            if (invins_frames <= 0.) {
+                invins_frames = 0.;
+                paused = false;
+            }
+        }
+        if (!InWater(astronomer.x, astronomer.y - 0.3 * astronomer.image.getHeight())) {
+            air_counter += astronomer_time;
+        } else {
+            air_counter = Math.min(air_counter, AquaBenefit()? 10. : 3.);
+            int bubbles_shown = (int)(air_counter + 0.99);
+            for (int i = 0; i < bubbles_shown; ++i) {
+                air.x = astronomer.x + 20 * i - 50;
+                air.y = astronomer.y - 100;
+                air.StepAndDraw();
+            }
+            air_counter = Math.max(0, air_counter - astronomer_time);
+            if (air_counter == 0 && invins_frames == 0) {
+                astronomer.health -= 1;
+                invins_frames = 1.5;
+            }
+        }
+        double p = Math.min(astronomer.GetDouble("poison rate") * astronomer_time, astronomer.GetDouble("poison"));
+        astronomer.AddDouble("poison", -p);
+        if (p > 0) astronomer.health = Math.max(0.5, astronomer.health - p);
+        for (int i = 0; i < 5; ++i) {
+            for (int j = 0; j < 5; ++j) {
+                double spare = astronomer.health - i * 5 - j - 0.1;
+                double spare_max = astronomer.GetDouble("max_health") - i * 5 - j;
+                double spare_2 = spare - astronomer.GetDouble("poison");
+                if (spare_max <= 0) {
+                    break;
+                }
+                Sprite sp = empty_heart;
+                if (spare > 0.) sp = half_heart_poisoned;
+                if (spare > 0.5) sp = full_heart_poisoned;
+                sp.x = animator.width + (j - 4.5) * full_heart.image.getWidth();
+                sp.y = (i + 0.5) * full_heart.image.getHeight();
+                sp.StepAndDraw();
+                if (spare_2 > 0.) sp = half_heart;
+                if (spare_2 > 0.5) sp = full_heart;
+                sp.x = animator.width + (j - 4.5) * full_heart.image.getWidth();
+                sp.y = (i + 0.5) * full_heart.image.getHeight();
+                sp.StepAndDraw();
+            }
+        }
+        if (HitChecker(astronomer, 0.4, true)) {
+            animator.Sound("../zodiac/Sounds\\Pain-SoundBible.com-1883168362.wav", -10, 1., 1, "hit", 10, 0.2);
+        }
+        Graphics2D g = animator.graphics;
+        g.setColor(Color.BLACK);
+        g.fillRect((int)(animator.width * 0.75), 3, (int)(animator.width * 0.142), 30);
+        g.setColor(Color.RED);
+        g.fillRect((int)(animator.width * 0.75254), 6, (int)(animator.width * 0.137), 24);
+        g.setColor(Color.GREEN);
+        g.fillRect((int)(animator.width * 0.75254), 6, 
+                (int)(animator.width * 0.137 * astronomer.GetDouble("stamina") / astronomer.GetDouble("max_stamina")), 24);
+    }
+    
+    void PickCons(Sprite sprite) {
+        if (!sprite.Contains("px")) return;
+        sprite.health = 0.;
+        for (Sprite found : foregrounds.get(2)) if (found.id.equals(sprite.id)) found.Remove("inactive");
+        tutorial_writing = ZodiacDraw.constellations.get(sprite.id).GetString("tutorial");
+        prev_astronomer = astronomer;
+        GoDojo();
+    }
+    
+    boolean PickBuff(Sprite item) {
+        if (!item.Contains("px") || paused) return false;
+        item.health = 0.;
+        buffs.get(item.id).partial = 1.;
+        tutorial_writing = buffs.get(item.id).GetString("tutorial");
+        for (Sprite found : foregrounds.get(2)) if (found.id.equals(item.id)) found.Remove("inactive");
+        return true;
+    }
+    
+    void Move_win_star(Sprite item) {
+        if (!item.Contains("px")) return;
+        item.health = 0.;
+        win_counter -= 1;
+        animator.Sound("../zodiac/Sounds\\Ting-Popup_Pixels-349896185.wav", 5, 1., 1, "yay", 1, 1.5);
+    }
+    
+    void ActivateItems(int r) {
+        if (!items.containsKey(r)) return;
+        for (Sprite sprite : items.get(r)) sprite.Remove("inactive");
+    }
+    
+    void TimeBuffs(TreeMap<String, Sprite> buffs, int x, int y) {
+        int dc = 0;
+        double size = 53;
+        for (Sprite buff : buffs.values()) {
+            if ((room >= 100) && buff.Contains("room") && (buff.GetInt("room") != room)) buff.partial = 0;
+            if (buff.partial <= 0.) continue;
+            buff.center_x = buff.center_y = 0;
+            buff.scale_x = size / buff.image.getWidth();
+            buff.scale_y = size / buff.image.getHeight();
+            buff.x = x + dc * (size + 5);
+            buff.y = y;
+            buff.StepAndDraw();
+            ++dc;
+        }
+    }
+    
+    void Move_arrow(Sprite sprite) {
+        sprite.x += 1000 * astronomer_time * Math.cos(sprite.angle);
+        sprite.y -= 1000 * astronomer_time * Math.sin(sprite.angle);
+        if (sprite.x > width + 100 || sprite.y > height + 100 || sprite.x < -100 || sprite.y < -100) sprite.health = 0.;
+        ArrayList<Sprite> ens = GetSprites(enemies);
+        for (Sprite enemy : ens) {
+            if (sprite.Collision(enemy) != null) {
+                if (!enemy.Contains("!arrow")) enemy.health -= 1;
+                sprite.health = 0.;
+            }
+        }
+        ArrayList<Sprite> fors = GetSprites(foregrounds);
+        for (int i = fors.size() - 1; i >= 0; --i) {
+            if (fors.get(i).id.equals("target") &&
+                    (sprite.Collision(fors.get(i)) != null)) {
+                fors.remove(i);
+                sprite.health = 0.;
+            }
+        }
+    }
+    
+    void Move_water_drop(Sprite sprite) {
+        sprite.x += astronomer_time * sprite.vx;
+        sprite.y += astronomer_time * sprite.vy;
+        sprite.angle = Animator.Angle(sprite.vx, -sprite.vy);
+        sprite.vy += gravity * astronomer_time * 100;
+        if (sprite.x > width + 100 || sprite.y > height + 100 || sprite.x < -100 || sprite.y < -100) sprite.health = 0.;
+        ArrayList<Sprite> ens = GetSprites(enemies);
+        for (Sprite enemy : ens) if (sprite.Collision(enemy) != null) sprite.health = 0.;
+        ArrayList<Sprite> obs = GetSprites(obstacles);
+        for (Sprite obstacle : obs) if (sprite.Collision(obstacle) != null) sprite.health = 0.;
+        ArrayList<Sprite> fors = GetSprites(foregrounds);
+        for (int i = fors.size() - 1; i >= 0; --i) {
+            if (fors.get(i).id.equals("electrical") &&
+                    (sprite.Collision(fors.get(i)) != null)) {
+                fors.get(i).PutString("destroyed", "");
+                sprite.health = 0.;
+            }
+        }
+    }
+
+    void GoThroughDoors() {
+        if (astronomer.health <= 0 || win_counter == 0) return;
+        for (Sprite entry : GetSprites(doors)) {
+            if (entry.Contains("inactive") || (entry.next_sprite == null)) continue;
+            double q = 0.5 * Math.abs(entry.scale_x) * entry.image.getWidth();
+            double cs = Math.cos(entry.angle);
+            double sn = Math.sin(entry.angle);
+            double shift_x = -door_shift * sn;
+            double shift_y = -door_shift * cs;
+            double p1x = entry.x - q * cs;
+            double p1y = entry.y + q * sn;
+            double p2x = entry.x + q * cs;
+            double p2y = entry.y - q * sn;
+            //double p_x = cs * (astronomer.x - p1x) - sn * (astronomer.y - p1y);
+            double p_y = cs * (astronomer.y - p1y) + sn * (astronomer.x - p1x);
+            double prev_x = cs * (ast_x - p1x) - sn * (ast_y - p1y);
+            double prev_y = cs * (ast_y - p1y) + sn * (ast_x - p1x);
+            double p0_x = cs * (p2x - p1x) - sn * (p2y - p1y);
+            if (((p_y * prev_y > 0) && (Math.abs(prev_y) > door_distance))
+                    || prev_x < 0 || prev_x > p0_x) continue;
+            Sprite exit = entry.next_sprite;
+            double exit_q = 0.5 * Math.abs(exit.scale_x) * exit.image.getWidth();
+            exit_q = Math.min(1., exit_q / q);
+            double adif = (entry.angle - exit.angle) / Math.PI;
+            adif -= Math.floor(adif);
+            if (adif > 0.5) adif -= 1.;
+            adif *= Math.PI;
+            cs = Math.cos(adif) * exit_q;
+            sn = Math.sin(adif) * exit_q;
+            double dx = astronomer.x - entry.x;
+            double dy = astronomer.y - entry.y;
+            astronomer.x = cs * dx + sn * dy + exit.x + shift_x;
+            astronomer.y = -sn * dx + cs * dy + exit.y + shift_y;
+            if (room != exit.GetInt("room")) {
+                Colosseum.KillScales();
+                animator.Quiet("");
+                attacks.clear();
+            }
+            boolean same_biome = room / 100 == exit.GetInt("room") / 100;
+            ArrayList<Sprite> ens = GetSprites(enemies);
+            room = exit.GetInt("room");
+            astronomer.Remove("x");
+            astronomer.Remove("y");
+            astronomer.Remove("angle");
+            astronomer.Remove("scale_x");
+            astronomer.Remove("scale_y");
+            astronomer.Remove("rush");
+            for (int i = ens.size() - 1; i >= 0; --i) {
+                Sprite enemy = ens.get(i);
+                if (enemy.Contains("only")) {
+                    String[] strs = enemy.GetString("only").split(",");
+                    boolean found = false;
+                    for (String str : strs) found = found || (Integer.valueOf(str) == room);
+                    if (!found) {
+                        enemy.Remove("hot");
+                        continue;
+                    }
+                } else {
+                    if (!same_biome) continue;
+                }
+                if (enemy.Contains("hot")) {
+                    dx = enemy.x - entry.x;
+                    dy = enemy.y - entry.y;
+                    enemy.x = cs * dx + sn * dy + exit.x + shift_x;
+                    enemy.y = -sn * dx + cs * dy + exit.y + shift_y;
+                    if (enemy.Contains("px")) enemy.Remove("px");
+                    if (enemy.Contains("py")) enemy.Remove("py");
+                    ChangeRoom(enemy, room, enemies);
+                }
+            }
+            break;
+        }
+        ast_x = astronomer.x;
+        ast_y = astronomer.y;
+    }
+    
+    void ReadFromString(String all) {
+        backgrounds = new TreeMap<>();
+        obstacles = new TreeMap<>();
+        climbables = new TreeMap<>();
+        items = new TreeMap<>();
+        enemies = new TreeMap<>();
+        foregrounds = new TreeMap<>();
+        doors = new TreeMap<>();
+        Serializer ser = new Serializer();
+        ArrayList<String> strs = ser.Split(all);
+        ArrayList<Sprite> sprites = new ArrayList<>();
+        int num = 0;
+        for (String str : strs) {
+            String lab = ser.Split(str).get(1);
+            Sprite sprite = new Sprite(1);
+            sprites.add(sprite);
+            if (lab.equals("suit")) {
+                suit = new Suit();
+                ser.Deserialize(suit, "", str, true, false);
+                continue;
+            }
+            ser.Deserialize(sprite, "", str, true, false);
+            if (sprite.Contains("temp")) continue;
+            ++num;
+            if (sprite.health <= 0.) sprite.health = 1.;
+            sprite.path = sprite.path.replace('\\', '/');            
+            if (lab.equals("backgrounds")) {
+                AddBackground(sprite);
+            } else if (lab.equals("obstacles")) {
+                AddGeneral(sprite, obstacles);
+            } else if (lab.equals("climbables")) {
+                AddGeneral(sprite, climbables);
+            } else if (lab.equals("items")) {
+                AddGeneral(sprite, items);
+            } else if (lab.equals("enemies")) {
+                AddGeneral(sprite, enemies);
+            } else if (lab.equals("mandatory_enemies")) {
+                AddGeneral(sprite, mandatory_enemies);
+            } else if (lab.equals("foregrounds")) {
+                AddGeneral(sprite, foregrounds);
+            } else if (lab.equals("doors")) {
+                AddDoor(sprite);
+            } else if (lab.equals("buffs") && (last_file_number < 0)) {
+                if (buffs.containsKey(sprite.id)) {
+                    Sprite buff = buffs.get(sprite.id);
+                    sprite.image = buff.image;
+                    sprite.dimage = buff.dimage;
+                    buffs.replace(sprite.id, sprite);
+                }
+            } else if (lab.equals("astronomer")) {
+                astronomer = sprite;
+            }
+        }
+        for (int i = 0; i < strs.size(); ++i) {
+            String str = strs.get(i);
+            String lab = ser.Split(str).get(1);
+            if (lab.equals("doors")) {
+                Sprite sprite = sprites.get(i);
+                ser.Deserialize(sprite, "", str, true, false);
+                if (sprite.health <= 0.) sprite.health = 1.;
+            }
+        }
+        System.out.println("read " + num + " sprites");
+    }
+    
+    void Read() {
+        last_file_number = -1;
+        File fil = null;
+        if (player_name != null) {
+            fil = new File("zodiac/Grasslands_Data/data__" + player_name);
+            if (!fil.isFile()) fil = null;
+        }
+        if (fil == null) {
+            File[] files = new File("zodiac/Grasslands_Data").listFiles();
+            for (File file : files) {
+                String str = file.getName();
+                String beg = "data_";
+                if (str.startsWith(beg)) {
+                    try {
+                        int n = Integer.valueOf(str.substring(beg.length()));
+                        if (n > last_file_number) {
+                            last_file_number = n;
+                            fil = file;
+                        }
+                    } catch (NumberFormatException e) {}
+                }
+            }
+        }
+        if (fil != null) {
+            String all = Animator.ReadString(fil, null);
+            ReadFromString(all);
+        }
+    }
+    
+    void Clean(Sprite sprite) {
+        sprite.Remove("start_x");
+        sprite.Remove("start_y");
+        sprite.Remove("mode");
+        sprite.Remove("rain_number");
+    }
+
+    String SaveToString(boolean with_astronomer) {
+        int num = 0;
+        String all = "";
+        Serializer ser = new Serializer();
+        for (int r : backgrounds.keySet()) for (Sprite sprite : backgrounds.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "backgrounds", false));
+                ++num;
+            }
+        }
+        for (int r : obstacles.keySet()) for (Sprite sprite : obstacles.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "obstacles", false));
+                ++num;
+            }
+        }
+        for (int r : climbables.keySet()) for (Sprite sprite : climbables.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "climbables", false));
+                ++num;
+            }
+        }
+        for (int r : items.keySet()) for (Sprite sprite : items.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "items", false));
+                ++num;
+            }
+        }
+        for (int r : enemies.keySet()) for (Sprite sprite : enemies.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "enemies", false));
+                ++num;
+            }
+        }
+        for (int r : mandatory_enemies.keySet()) for (Sprite sprite : mandatory_enemies.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "mandatory_enemies", false));
+                ++num;
+            }
+        }
+        for (int r : foregrounds.keySet()) for (Sprite sprite : foregrounds.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "foregrounds", false));
+                ++num;
+            }
+        }
+        for (int r : doors.keySet()) for (Sprite sprite : doors.get(r)) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "doors", false));
+                ++num;
+            }
+        }
+        for (Sprite sprite : buffs.values()) {
+            Clean(sprite);
+            if (!sprite.Contains("temp")) {
+                all += ser.Wrap(ser.Serialize(sprite, "buffs", false));
+                ++num;
+            }
+        }
+        if (with_astronomer) all += ser.Wrap(ser.Serialize(astronomer, "astronomer", false));
+        all += ser.Wrap(ser.Serialize(suit, "suit", false));
+        System.out.println("wrote " + num + " sprites");
+        return all;
+    }
+    
+    public static double PiecewiseLinear(double t, double[] times, double[] values) {
+        if (t < times[0]) return values[0];
+        for (int i = 1; i < times.length; ++i) {
+            if (t <= times[i]) {
+                double z = (t - times[i - 1]) / (times[i] - times[i - 1]);
+                return z * values[i] + (1 - z) * values[i - 1];
+            }
+        }
+        return values[values.length - 1];
+    }
+    
+    public static double PiecewiseConstant(double t, double[] times, double[] values) {
+        for (int i = 1; i < times.length; ++i) {
+            if (t <= times[i]) return values[i - 1];
+        }
+        return values[values.length - 1];
+    }
+    
+}
