@@ -1,0 +1,1 @@
+These folders contain the projects that I've been working on since middle school. In each project there are some files that were created by my father to assist me, but the projects themselves were all written and designed by me.
