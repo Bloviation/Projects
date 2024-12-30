@@ -1,0 +1,616 @@
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.NoninvertibleTransformException;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.TreeMap;
+    
+public class Sprite {
+    static final double COLLIDER_R = 0.2;
+    static TreeMap<String, BufferedImage> images;
+    public static boolean allow_flip = true;
+    public static double tran_x, tran_y, tran_angle;
+    public static double tran_scale_x, tran_scale_y;
+    public boolean tran, pause_partial;
+    public double x, y, angle, total_angle;
+    public double vx, vy, vangle;
+    public double s_x, s_y, s_angle;
+    public double d_x, d_y, d_angle;
+    public double transformation_speed;
+    public ArrayList<Sprite> next_sprites;
+    public Sprite next_sprite;
+    public int transform = 0;
+    public int i_mode;
+    public double i_scale_x, i_scale_y;
+    public double scale_x, scale_y;
+    public double c_x, c_y, center_x, center_y, center_angle;
+    public static boolean mark_center = false;
+    public String path;
+    public BufferedImage image, dimage;
+    public boolean rest;
+    public double image_nx, image_ny;
+    public BufferedImage collider;
+    public int collider_x, collider_y;
+    public double memory_scale_x, memory_scale_y, memory_total_angle;
+    public AffineTransform at;
+    public Sprite father;
+    public double father_cx, father_cy, father_movement, father_rigidity;
+    public String id;
+    public double extra_collision_mult, extra_collision_add;
+    public double health;
+    public TreeMap<String, String> extras;
+    public Rectangle rect, s_rect, orect;
+    public double dist_flip, x_flip, y_flip;
+    public double partial, partial_velocity;
+    public Double partial_x, partial_y;
+    
+
+    public Sprite(int num_idx) {
+        next_sprites = new ArrayList<Sprite>(num_idx);
+        for (int i = 0; i < num_idx; ++i) next_sprites.add(null);
+        extras = new TreeMap<>();
+        i_mode = -1;
+        scale_x = scale_y = 1.;
+        tran_scale_x = tran_scale_y = 1.;
+        extra_collision_mult = extra_collision_add = 0.;
+        d_x = d_y = d_angle = 0.;
+        dist_flip = 0.;
+        x = Animator.o.width / 2;
+        y = Animator.o.height / 2;
+        health = 1.;
+        partial = 1.;
+        partial_velocity = 0.;
+        tran = true;
+        pause_partial = false;
+    }
+    
+    public Sprite(BufferedImage image_, String path_, double c_x_, double c_y_,
+            double c_angle_, double i_scale_x_, double i_scale_y_, int i_mode_,
+            int num_idx_, String id_) {
+        this(image_, path_, c_x_, c_y_, c_angle_, i_scale_x_, i_scale_y_,
+                i_mode_, num_idx_, id_, true);
+    }
+
+    public Sprite(
+            BufferedImage image_,
+            String path_,  // When there is no image_, image path.
+            double c_x_,  // relative (between 0 and 1) x coordinate of
+            // sprite's center. The sprite is positioned and rotated relative
+            //to its center.
+            double c_y_,
+            double c_angle_,  // Initial rotation in radians.
+            double i_scale_x_,  // Rescale image's x coordinate.
+            // Usually 1., could be < 1 to save space.
+            // Sprite size is controled by a diffrent method (SetScale).
+            double i_scale_y_,
+            int i_mode_,  // 0 - absolute, 1 - relative to image,
+            //               2 - relative to screen
+            int num_idx,  // Length of the array of pointers to next sprites.
+            // Usually 1 (forwards), 2 (forwards and back) or 4 (forwards, back,
+            // rotate left, rotate right).
+            String id_,  // Identification string.
+            boolean tran_  // Will it move with the camera?
+    ) {
+        this(num_idx);
+        image = image_;
+        path = path_;
+        c_x = c_x_;
+        c_y = c_y_;
+        center_angle = c_angle_;
+        i_scale_x = i_scale_x_;
+        i_scale_y = i_scale_y_;
+        i_mode = i_mode_;
+        id = id_;
+        tran = tran_;
+        Image();
+        center_x = c_x * image.getWidth();
+        center_y = c_y * image.getHeight();
+    }
+    
+    public void Regularize() {
+        if (i_mode < 0) {
+            if (i_scale_x == 0.) {
+                i_scale_x = i_scale_y = 1.;
+                i_mode = 2;
+            } else if (i_scale_y == 0.) {
+                i_scale_y = i_scale_x;
+                i_mode = 2;
+            } else {
+                i_mode = 1;
+            }
+        }
+    }
+    
+    public void Image() {
+        //Regularize();
+        dimage = image;
+        if (image != null) return;
+        if (images == null) images = new TreeMap<>();
+        String path_scale = path + "$" + i_scale_x +"$" + i_scale_y +
+                "$" + i_mode;
+        dimage = image = images.get(path_scale);
+        if (image != null) return;
+        dimage = image =
+                Animator.o.ReadAndRescale(path, i_scale_x, i_scale_y, i_mode);
+        if (image != null) images.put(path_scale, image);
+    }
+    
+    public void SetSmoothing(double d_x_, double d_y_, double d_angle_) {
+        d_x = d_x_;
+        d_y = d_y_;
+        d_angle = d_angle_;
+    }
+    
+    public void Recenter(double c_x_, double c_y_) {
+        c_x = c_x_;
+        c_y = c_y_;
+        double dx = scale_x * (-center_x + c_x *  image.getWidth());
+        double dy = scale_y * (-center_y + c_y * image.getHeight());
+        double c = Math.cos(angle);
+        double s = Math.sin(angle);
+        x += c * dx + s * dy;
+        y += -s * dx + c * dy;
+        center_x = c_x * image.getWidth();
+        center_y = c_y * image.getHeight();
+    }
+    
+    public String GetString(String name) {
+        if (!extras.containsKey(name)) {
+            System.out.println("GetString missing " + name);
+            return "";
+        }
+        return extras.get(name);
+    }
+    public double GetDouble(String name) {
+        if (!extras.containsKey(name)) {
+            System.out.println("GetDouble missing " + name);
+            return 0.;
+        }
+        return Double.valueOf(extras.get(name));
+    }
+    public int GetInt(String name) {
+        if (!extras.containsKey(name)) {
+            System.out.println("GetInt missing " + name);
+            return 0;
+        }
+        return Integer.valueOf(extras.get(name));
+    }
+    
+    public void PutString(String name, String str) {
+        extras.put(name, str);
+    }
+    public void PutDouble(String name, double d) {
+        extras.put(name, String.valueOf(d));
+    }
+    public void PutInt(String name, int i) {
+        extras.put(name, String.valueOf(i));
+    }
+    
+    public void AddDouble(String name, double d) {
+        if (!extras.containsKey(name)) {
+            System.out.println("AddDouble missing " + name);
+            extras.put(name, "0");
+        }
+        extras.put(name, String.valueOf(Double.valueOf(extras.get(name)) + d));
+    }
+    public void AddInt(String name, int d) {
+        if (!extras.containsKey(name)) {
+            System.out.println("AddInt missing " + name);
+            extras.put(name, "0");
+        }
+        extras.put(name, String.valueOf(Integer.valueOf(extras.get(name)) + d));
+    }
+    
+    public boolean Contains(String name) {
+        return extras.containsKey(name);
+    }
+    public void Remove(String name) {
+        extras.remove(name);
+    }
+    
+    public Sprite NextSprite() {
+        if (next_sprite != null) return next_sprite;
+        if (next_sprites.isEmpty()) return null;
+        return next_sprites.get(0);
+    }
+
+    public void SetScale(
+            double scale_x_,
+            double scale_y_) {
+        scale_x = scale_x_;
+        scale_y = scale_y_;
+    }
+
+    public void SetImageInfo(
+            boolean rest_,  // Is it o.k. to stop at this image?
+            double image_nx_,  // normal direction x component
+            double image_ny_
+    ) {
+        rest = rest_;
+        image_nx = image_nx_;
+        image_ny = image_ny_;
+    }
+
+    public void SetFather(Sprite father_, double father_cx_, double father_cy_,
+            double father_movement_, double father_rigidity_) {
+        father = father_;
+        father_cx = father_cx_;
+        father_cy = father_cy_;
+        father_movement = father_movement_;
+        father_rigidity = father_rigidity_;
+        if (father.at == null) father.Step();
+        if (at == null) Step();
+    }
+    
+    public void LocateFather(double x_, double y_) {
+        Point2D p2d = new Point2D.Double(x_, y_);
+        Point2D n2d = new Point2D.Double();
+        try {
+            father.at.createInverse().transform(p2d, n2d);
+        } catch (NoninvertibleTransformException ex) {}
+        father_cx = n2d.getX() / father.dimage.getWidth();
+        father_cy = n2d.getY() / father.dimage.getHeight();
+    }
+ 
+    public double Dist2(int ind_, double nx, double ny) {
+        Sprite sprite = next_sprites.get(ind_);
+        return 1. - sprite.image_nx * nx - sprite.image_ny * ny;
+    }
+    
+    public void StepAndDraw() {
+        StepAndDraw(Animator.o.graphics);
+    }
+    
+    public void StepAndDraw(Graphics2D graphics) {
+        Step();
+        Draw(graphics);
+    }
+    
+    public void Draw() {
+        Draw(Animator.o.graphics);
+    }
+    
+    public void Draw(Graphics2D graphics) {
+        if (!pause_partial) partial += partial_velocity * Animator.o.frame_time;
+        partial = Math.max(0., Math.min(1., partial));
+        if (partial >= 1.) graphics.drawImage(dimage, at, null);
+        if (partial >= 1. || (partial <= 0.)) {
+            if (mark_center) MarkCenter(graphics);
+            return;
+        }
+        int xx = 0;
+        int w = dimage.getWidth();
+        if (partial_x != null) {
+            xx = (int)((1. - partial) * partial_x * w);
+            w = (int)(w * partial) + 1;
+        }
+        int yy = 0;
+        int h = dimage.getHeight();
+        if (partial_y != null) {
+            yy = (int)((1. - partial) * partial_y * h);
+            h = (int)(h * partial) + 1;
+        }
+        BufferedImage im = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = im.createGraphics();
+        g.drawImage(dimage, -xx, -yy, null);
+        at.translate(xx, yy);
+        graphics.drawImage(im, at, null);
+        at.translate(-xx, -yy);
+    }
+    
+    public void MarkCenter(Graphics2D graphics) {
+    	double tt = Animator.o.total_time;
+    	tt -= (int) tt;
+    	graphics.setColor(tt < 0.5? Color.green : Color.red);
+    	graphics.fillOval((int) x - 2, (int) y - 2, 4, 4);
+    }
+    
+    public void DrawScale(Graphics2D graphics, double scal_x, double scal_y) {
+        graphics.drawImage(dimage, CreateAffine(scal_x, scal_y), null);
+    }
+    
+    public void SetPartial(double partial_, double partial_velocity_,
+            Double partial_x_, Double partial_y_) {
+        partial = partial_;
+        partial_velocity = partial_velocity_;
+        partial_x = partial_x_;
+        partial_y = partial_y_;
+    }
+    
+    public static void DrawLine(double x0, double y0, double x1, double y1,
+            Graphics2D g) {
+        Graphics2D gg = g == null? Animator.o.graphics : g;
+        gg.drawLine((int)(x0 - tran_x), (int)(y0 - tran_y),
+                (int)(x1 - tran_x), (int)(y1 - tran_y));
+    }
+    
+    public boolean Call(String str) {
+        return Call(Animator.o.myclass, str);
+    }
+    
+    public boolean Call(Object mc, String str) {
+        Method method = null;
+        Class[] cArg = new Class[1];
+        cArg[0] = Sprite.class;
+        try { method = mc.getClass().getDeclaredMethod(str, cArg);
+        } catch (NoSuchMethodException ex) {
+            return false;
+        } catch (SecurityException ex) { Animator.o.Exit(ex); }
+        method.setAccessible(true);
+        try { method.invoke(mc, this);
+        } catch (Exception ex) { Animator.o.Exit(ex); }
+        return true;
+    }
+    
+    public void FlipX() {
+        scale_x = -scale_x;
+        center_x = image.getWidth() - center_x;
+        angle = -angle;
+        center_angle = -center_angle;
+        TouchCollider();
+    }
+    
+    public void FlipY() {
+        scale_y = -scale_y;
+        center_y = image.getHeight() - center_y;
+        angle = -angle;
+        center_angle = -center_angle;
+        TouchCollider();
+    }
+    
+    public void FlipDirX() {
+        if (angle > 0.) {
+            angle -= Math.PI;
+        } else {
+            angle += Math.PI;
+        }
+        center_x = image.getWidth() - center_x;
+        center_y = image.getHeight() - center_y;
+        FlipY();
+    }
+    
+    public AffineTransform CreateAffine(double scal_x, double scal_y) {
+        AffineTransform bt = new AffineTransform();
+        bt.translate(s_x, s_y);
+        if (tran) {
+            bt.translate(-s_x + Animator.o.width / 2,
+                    -s_y + Animator.o.height / 2);
+            bt.rotate(tran_angle);
+            bt.scale(tran_scale_x, tran_scale_y);
+            bt.translate(s_x - tran_x - Animator.o.width / 2,
+                    s_y - tran_y - Animator.o.height / 2);
+        }
+        bt.rotate(-total_angle);
+        bt.scale(scal_x, scal_y);
+        bt.translate(-center_x, -center_y);
+        return bt;
+    }
+    
+    public void Step() {
+        if (image == null) {
+            Image();
+            center_x = c_x * image.getWidth();
+            center_y = c_y * image.getHeight();
+        }
+        double dx = x - x_flip;
+        double dy = y - y_flip;
+        if (dx * dx + dy * dy > dist_flip * dist_flip) {
+            x_flip = x;
+            y_flip = y;
+            double dd = dx * Math.cos(angle) - dy * Math.sin(angle);
+            if (allow_flip &&
+                    (Math.abs(dd) > 0.5 * Math.abs(dist_flip)) &&
+                    (Math.abs(dx) < 0.5 * Animator.o.width) && 
+                    (Math.abs(dy) < 0.5 * Animator.o.height)) {
+                if (dist_flip > 0.) {
+                    if (scale_x * dd < 0.) FlipDirX();
+                    if (scale_x * scale_y * Math.cos(angle) < 0.) {
+                        scale_y = -scale_y;
+                        center_y = image.getHeight() - center_y;
+                    }
+                } else if (dist_flip < 0.) {
+                    if (scale_x * dd < 0.) FlipX();
+                }
+            }
+        }
+        TouchCollider();
+        if (father != null) {
+            if ((father.image == null) || (father.at == null)) father.Step();
+            Point2D p2d =
+                    new Point2D.Double(father_cx * father.dimage.getWidth(),
+                    father_cy * father.dimage.getHeight());
+            Point2D n2d = new Point2D.Double();
+            if (father.tran) {
+                father.tran = false;
+                father.CreateAffine(father.scale_x, father.scale_y).transform(p2d, n2d);
+                father.tran = true;
+            } else {
+                father.at.transform(p2d, n2d);
+            }
+            double z = Math.min(1., father_rigidity * Animator.o.frame_time);
+            double zx = z * (n2d.getX() - x);
+            double zy = z * (n2d.getY() - y);
+            x += (1. - father_movement) * zx;
+            y += (1. - father_movement) * zy;
+            father.x -= father_movement * zx;
+            father.y -= father_movement * zy;
+        }
+        s_x = Math.min(x + d_x, Math.max(x - d_x, s_x));
+        s_y = Math.min(y + d_y, Math.max(y - d_y, s_y));
+        s_angle = Math.min(angle + d_angle,
+                Math.max(angle - d_angle, s_angle));
+        total_angle = s_angle - center_angle * Math.signum(scale_x * scale_y);
+        at = CreateAffine(scale_x, scale_y);
+    }
+
+    
+    public void Measure() {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        orect = new Rectangle(w, h, 0, 0);
+        for (int i = 0; i < w; ++i) {
+            for (int j = 0; j < h; ++j) {
+                if (image.getRGB(i, j) != 0) {
+                    orect.x = Math.min(orect.x, i);
+                    orect.y = Math.min(orect.y, j);
+                    orect.width = Math.max(orect.width, i);
+                    orect.height = Math.max(orect.height, j);
+                }
+            }
+        }
+        orect.width -= orect.x;
+        orect.height -= orect.y;
+    }
+    
+    public void NormalizeCenter() {
+        center_x = s_rect.x + 0.5 * s_rect.width;
+        center_y = s_rect.y + 0.5 * s_rect.height;
+    }
+    
+    public void NormalizeScale() {
+        double mult = 0.5 * Math.min(orect.width / (s_rect.width + 0.1),
+                orect.height / (s_rect.height + 0.1));
+        scale_x *= mult;
+        scale_y *= mult;
+    }
+    
+    public void Mark() {
+        double t = Animator.o.total_time;
+        t -= Math.floor(t);
+        Animator.o.graphics.setColor(t > 0.5 ? Color.red : Color.green);
+        Animator.o.graphics.fillOval((int)x - 5, (int)y - 5, 10, 10);
+    }
+
+    void SketchRotate(Point2D p2d, AffineTransform bt, int xy[]) {
+        Point2D n2d = new Point2D.Double();
+        bt.transform(p2d, n2d);
+        xy[0] = Math.min(xy[0], (int)n2d.getX());
+        xy[1] = Math.min(xy[1], (int)n2d.getY());
+        xy[2] = Math.max(xy[2], (int)n2d.getX());
+        xy[3] = Math.max(xy[3], (int)n2d.getY());
+    }
+    
+    public void TouchCollider() {
+        memory_scale_x = memory_scale_y = 0;
+    }
+        
+    void Collider() {
+        if (dimage == null) dimage = image;
+        if (at == null) Step();
+        double sx = scale_x * (1. + extra_collision_mult) + extra_collision_add;
+        double sy = scale_y * (1. + extra_collision_mult) + extra_collision_add;
+        total_angle = angle - center_angle * Math.signum(scale_x * scale_y);
+        if (sx == memory_scale_x && sy == memory_scale_y &&
+                total_angle == memory_total_angle) return;
+        memory_scale_x = sx;
+        memory_scale_y = sy;
+        memory_total_angle = total_angle;
+        AffineTransform bt = new AffineTransform();
+        bt.rotate(-total_angle);
+        bt.scale(sx * COLLIDER_R, sy * COLLIDER_R);
+        bt.translate(-center_x, -center_y);
+        int[] xy = new int[4];
+        SketchRotate(new Point2D.Double(0, 0), bt, xy);
+        SketchRotate(new Point2D.Double(dimage.getWidth(), 0), bt, xy);
+        SketchRotate(new Point2D.Double(dimage.getWidth(), dimage.getHeight()),
+                bt, xy);
+        SketchRotate(new Point2D.Double(0, dimage.getHeight()), bt, xy);
+        collider_x = -xy[0];
+        collider_y = -xy[1];
+        if (xy[2] <= xy[0] || xy[3] <= xy[1]) {
+            collider = null;
+            return;
+        }
+        collider = new BufferedImage(xy[2] - xy[0], xy[3] - xy[1],
+                BufferedImage.TYPE_INT_ARGB);
+        AffineTransform ct = new AffineTransform();
+        ct.translate(collider_x, collider_y);
+        ct.concatenate(bt);
+        ((Graphics2D)collider.getGraphics()).drawImage(dimage, ct, null);
+    }
+
+    // Is point (i, j) approximately in this sprite?
+    public Point2D Collision(double i, double j) {
+        Collider();
+        if (collider == null) return null;
+        int ix = (int)((i - x) * COLLIDER_R + collider_x);
+        int jy = (int)((j - y) * COLLIDER_R + collider_y);
+        if (ix >= 0 && ix < collider.getWidth() &&
+                jy >= 0 && jy < collider.getHeight() && 
+                (collider.getRGB(ix, jy) & 0xff000000) != 0)
+            return new Point2D.Double(i, j);
+        return null;
+    }
+    
+    public Point2D RectCollision(double i, double j) {
+        Point2D p2d = new Point2D.Double(i, j);
+        Point2D n2d = new Point2D.Double();
+        if (image == null) StepAndDraw();
+        try {
+            at.createInverse().transform(p2d, n2d);
+        } catch (NoninvertibleTransformException ex) {}
+        if (n2d.getX() >= 0 && n2d.getX() < image.getWidth() &&
+                n2d.getY() >= 0 && n2d.getY() < image.getHeight()) return p2d;
+        return null;
+    }
+
+    // Return an approximate collision point between this and sprite, or null
+    // when there is no collision.
+    public Point2D Collision(Sprite sprite) {
+        Collider();
+        sprite.Collider();
+        if (collider == null || sprite.collider == null) return null;
+        int dx = (int) (collider_x - sprite.collider_x +
+                (sprite.x - x) * COLLIDER_R);
+        int dy = (int) (collider_y - sprite.collider_y +
+                (sprite.y - y) * COLLIDER_R);
+        int x0 = Math.max(0, dx);
+        int x1 = Math.min(collider.getWidth(), dx + sprite.collider.getWidth());
+        int y0 = Math.max(0, dy);
+        int y1 = Math.min(collider.getHeight(),
+                dy + sprite.collider.getHeight());
+        int md2 = Integer.MAX_VALUE;
+        Point2D point = null;
+        for (int i = x0; i < x1; ++i) {
+            for (int j = y0; j < y1; ++j) {
+                if ((collider.getRGB(i, j) & 0xff000000) != 0 &&
+                        sprite.collider.getRGB(i - dx, j - dy) != 0) {
+                    int d2 = (i - collider_x) * (i - collider_x) +
+                            (j - collider_y) * (j - collider_y);
+                    if (d2 < md2) {
+                        md2 = d2;
+                        point = new Point2D.Double(
+                                (i - collider_x) / COLLIDER_R + x,
+                                (j - collider_y) / COLLIDER_R + y);
+                    }
+                }
+            }
+        }
+        return point;
+    }
+    
+    String Map2String(Map<String, Double> map) {
+        String str = "";
+        for (Map.Entry<String, Double> entry : map.entrySet()) {
+            str += entry.getKey() + ":" + entry.getValue() + ",";
+        }
+        return str.substring(0, str.length() - 1);
+    }
+    
+    Map<String, Double> String2Map(String str) {
+        Map<String, Double> map = new TreeMap<String, Double>();
+        String[] sts = str.split(",");
+        for (String st : sts) {
+            String[] s = st.split(":");
+            assert s.length == 2;
+            map.put(s[0], Double.valueOf(s[1]));
+        }
+        return map;
+    }
+
+}
