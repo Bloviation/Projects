@@ -1,1 +1,703 @@
+import animator.Animator;
+import animator.Sprite;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 
+public class Chess {
+
+    public static void main(String[] args) {
+        Chess chess = new Chess();
+        animator = new Animator(chess, 0, 0, "action", false);
+        animator.SetCursor(0);
+        animator.Animate();
+    }
+    
+    static Animator animator;
+    static ArrayList<Piece> pieces;
+    static Piece[][] board;
+    static boolean[][] threatened;
+    static boolean game_over;
+    static boolean stalemate;
+    static BufferedImage chess_board;
+    static int width;
+    static int height;
+    static int[] past_pos;
+    static Piece past_piece;
+    static int[] selected;
+    static int[] evolve;
+    
+    public void Init_action() {
+        width = ((animator.width - animator.height) / 2 + 548) / 8;
+        height = (animator.height - 112) / 8;
+        chess_board = animator.ReadAndRescale("Images\\Chess_Board.jpg", animator.height, animator.height, 0);
+        pieces = new ArrayList<>();
+        evolve = null;
+        game_over = false;
+        stalemate = false;
+        past_pos = new int[2];
+        past_piece = null;
+
+        pieces.add(new Pawn(true, 0, 1));
+        pieces.add(new Pawn(true, 1, 1));
+        pieces.add(new Pawn(true, 2, 1));
+        pieces.add(new Pawn(true, 3, 1));
+        pieces.add(new Pawn(true, 4, 1));
+        pieces.add(new Pawn(true, 5, 1));
+        pieces.add(new Pawn(true, 6, 1));
+        pieces.add(new Pawn(true, 7, 1));
+        pieces.add(new Rook(true, 0, 0));
+        pieces.add(new Rook(true, 7, 0));
+        pieces.add(new Knight(true, 1, 0));
+        pieces.add(new Knight(true, 6, 0));
+        pieces.add(new Bishop(true, 2, 0));
+        pieces.add(new Bishop(true, 5, 0));
+        pieces.add(new Queen(true, 3, 0));
+        pieces.add(new King(true, 4, 0));
+        
+        pieces.add(new Pawn(false, 0, 6));
+        pieces.add(new Pawn(false, 1, 6));
+        pieces.add(new Pawn(false, 2, 6));
+        pieces.add(new Pawn(false, 3, 6));
+        pieces.add(new Pawn(false, 4, 6));
+        pieces.add(new Pawn(false, 5, 6));
+        pieces.add(new Pawn(false, 6, 6));
+        pieces.add(new Pawn(false, 7, 6));
+        pieces.add(new Rook(false, 0, 7));
+        pieces.add(new Rook(false, 7, 7));
+        pieces.add(new Knight(false, 1, 7));
+        pieces.add(new Knight(false, 6, 7));
+        pieces.add(new Bishop(false, 2, 7));
+        pieces.add(new Bishop(false, 5, 7));
+        pieces.add(new Queen(false, 3, 7));
+        pieces.add(new King(false, 4, 7));
+        MakeBoard();
+    }
+    
+    public static void DrawCorners(int[] location) {
+        Graphics2D g = animator.graphics;
+        int length = 25;
+        //top right
+        g.fillPolygon(new int[]{location[0] + width / 2 + 1, location[0] + width / 2 - length + 1, location[0] + width / 2 + 1}, 
+                new int[]{location[1] - height / 2, location[1] - height / 2, location[1] - height / 2 + length}, 3);
+        //top left
+        g.fillPolygon(new int[]{location[0] - width / 2, location[0] - width / 2 + length, location[0] - width / 2}, 
+                new int[]{location[1] - height / 2, location[1] - height / 2, location[1] - height / 2 + length}, 3);
+        //bottom right
+        g.fillPolygon(new int[]{location[0] + width / 2 + 1, location[0] + width / 2 - length + 1, location[0] + width / 2 + 1}, 
+                new int[]{location[1] + height / 2 + 1, location[1] + height / 2 + 1, location[1] + height / 2 - length + 1}, 3);
+        //bottom left
+        g.fillPolygon(new int[]{location[0] - width / 2, location[0] - width / 2 + length, location[0] - width / 2}, 
+                new int[]{location[1] + height / 2 + 1, location[1] + height / 2 + 1, location[1] + height / 2 - length + 1}, 3);
+    }
+    
+    public void Foreground_action() {
+        Color light = new Color(chess_board.getRGB(70, 70));
+        Color dark = new Color(chess_board.getRGB(70, 200));
+        Graphics2D g = animator.graphics;
+        int[] square = HoveringOver();
+        g.drawImage(chess_board, (animator.width - animator.height) / 2, 0, null);
+        for (int i = 0; i < 8; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                g.setColor((i + j) % 2 == 0? dark : light);
+                int[] square_loc = ComputeLocation(i, j);
+                if (selected != null && i == selected[0] && j == selected[1] && board[selected[0]][selected[1]] != null) g.setColor(Color.GREEN);
+                g.fillRect((int)(square_loc[0] - width / 2), (int)(square_loc[1] - height / 2), width, height);
+            }
+        }
+        g.setColor(Color.GREEN);
+        for(Piece p : pieces) {
+            if (p.open) {
+                int[] loc = ComputeLocation(p.x, p.y);
+                if (p.team) {
+                    g.fillRect(loc[0] - 15, loc[1], 30, height);
+                } else {
+                    g.fillRect(loc[0] - 15, loc[1] - height, 30, height);
+                }
+                break;
+            }
+        }
+        if (Piece.moves != null) {
+            for (int[] loc : Piece.moves) {
+                int[] location = ComputeLocation(loc[0], loc[1]);
+                if (square != null && square[0] == loc[0] && square[1] == loc[1]) {
+                    g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                } else if (board[loc[0]][loc[1]] != null) {
+                    DrawCorners(location);
+                } else {
+                    int r = 20;
+                    g.fillOval((int)location[0] - r, (int)location[1] - r, 2 * r, 2 * r);
+                }
+            }
+        }
+        g.setColor(Color.RED);
+        for (int i = 0; i < 8; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                if (board[i][j] != null && board[i][j].type.equals("king") && threatened[i][j]) {
+                    DrawCorners(ComputeLocation(i, j));
+                }
+            }
+        }
+        g.setColor(Color.GREEN);
+        /*g.setColor(Color.RED);
+        for (int i = 0; i < 8; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                int[] location = ComputeLocation(i, j);
+                if (threatened[i][j]) {
+                    if (board[i][j] != null) {
+                        DrawCorners(location);
+                    } else {
+                        int r = 20;
+                        g.fillOval((int)location[0] - r, (int)location[1] - r + 10, 2 * r, 2 * r);
+                    }
+                }
+            }
+        }*/
+        g.setColor(Color.GREEN);
+        for (Piece piece : pieces) piece.Draw();
+        if (evolve != null) {
+            int[] location = ComputeLocation(evolve[0], evolve[1]);
+            if (Piece.white_turn) {
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                location = ComputeLocation(evolve[0], evolve[1] - 1);
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                location = ComputeLocation(evolve[0], evolve[1] - 2);
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                location = ComputeLocation(evolve[0], evolve[1] - 3);
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                if (square != null && animator.MouseTyped(1) && square[0] == evolve[0] && square[1] >= evolve[1] - 3) {
+                    for (int i = pieces.size() - 1; i >= pieces.size() - 4; --i) {
+                        if (pieces.get(i).y == square[1]) {
+                            for (int j = 0; j < pieces.size(); ++j) {
+                                if (pieces.get(j).type.equals("pawn") && pieces.get(j).x == square[0] && pieces.get(j).y == 7) {
+                                    pieces.set(j, pieces.get(i));
+                                    pieces.get(j).x = evolve[0];
+                                    pieces.get(j).y = evolve[1];
+                                    int goal = pieces.size() - 4;
+                                    for (int k = pieces.size() - 1; k >= goal; --k) pieces.remove(k);
+                                    evolve = null;
+                                    for (Piece p : pieces) if (p.team != Piece.white_turn && p.type.equals("pawn")) p.open = false;
+                                    Piece.white_turn = !Piece.white_turn;
+                                    MakeBoard();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                location = ComputeLocation(evolve[0], evolve[1] + 1);
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                location = ComputeLocation(evolve[0], evolve[1] + 2);
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                location = ComputeLocation(evolve[0], evolve[1] + 3);
+                g.fillRect((int)(location[0] - width / 2), (int)(location[1] - height / 2), width, height);
+                if (square != null && animator.MouseTyped(1) && square[0] == evolve[0] && square[1] <= evolve[1] + 3) {
+                    for (int i = pieces.size() - 1; i >= pieces.size() - 4; --i) {
+                        if (pieces.get(i).y == square[1]) {
+                            for (int j = 0; j < pieces.size(); ++j) {
+                                if (pieces.get(j).type.equals("pawn") && pieces.get(j).x == square[0] && pieces.get(j).y == 0) {
+                                    pieces.set(j, pieces.get(i));
+                                    pieces.get(j).x = evolve[0];
+                                    pieces.get(j).y = evolve[1];
+                                    int goal = pieces.size() - 4;
+                                    for (int k = pieces.size() - 1; k >= goal; --k) pieces.remove(k);
+                                    evolve = null;
+                                    for (Piece p : pieces) if (p.team != Piece.white_turn && p.type.equals("pawn")) p.open = false;
+                                    Piece.white_turn = !Piece.white_turn;
+                                    MakeBoard();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for (int i = pieces.size() - 1; i >= pieces.size() - 4; --i) pieces.get(i).Draw();
+            return;
+        }
+        if (stalemate) {
+            g.drawString("Stalemate!", animator.width / 2 - 475, animator.height / 2 + 50);
+            return;
+        }
+        if (game_over) {
+            g.drawString((Piece.white_turn? "Black " : "White ") + "Wins!", animator.width / 2 - 525, animator.height / 2 + 50);
+            return;
+        }
+        if (animator.MouseTyped(1)) {
+            Piece piece = null;
+            if (selected != null) piece = board[selected[0]][selected[1]];
+            selected = square;
+            if (selected != null && Piece.moves != null) {
+                for (int[] move : Piece.moves) {
+                    if (move[0] == selected[0] && move[1] == selected[1]) {
+                        if (board[move[0]][move[1]] != null) {
+                            for (int i = 0; i < pieces.size(); ++i) {
+                                if (pieces.get(i).x == move[0] && pieces.get(i).y == move[1]) {
+                                    past_piece = pieces.get(i);
+                                    pieces.remove(i);
+                                    break;
+                                }
+                            }
+                        }
+                        if (piece.type.equals("king") && Math.abs(move[0] - piece.x) == 2) {
+                            if (move[0] > piece.x) {
+                                board[piece.x + 3][piece.y].start = false;
+                                board[piece.x + 3][piece.y].x = move[0] - 1;
+                            } else {
+                                board[piece.x - 4][piece.y].start = false;
+                                board[piece.x - 4][piece.y].x = move[0] + 1;
+                            }
+                        }
+                        past_pos[0] = piece.x;
+                        past_pos[1] = piece.y;
+                        piece.x = move[0];
+                        if (piece.type.equals("pawn") && Math.abs(piece.y - move[1]) == 2) piece.open = true;
+                        piece.y = move[1];
+                        boolean was_start = piece.start;
+                        piece.start = false;
+                        if (piece.type.equals("pawn") && piece.y < 7 && board[piece.x][piece.y + 1] != null && 
+                                board[piece.x][piece.y + 1].open && board[piece.x][piece.y + 1].team) {
+                            for (int i = 0; i < pieces.size(); ++i) {
+                                if (pieces.get(i) == board[piece.x][piece.y + 1]) {
+                                    past_piece = pieces.get(i);
+                                    pieces.remove(i);
+                                    break;
+                                }
+                            }
+                        } else if (piece.type.equals("pawn") && piece.y > 0 && board[piece.x][piece.y - 1] != null && 
+                                board[piece.x][piece.y - 1].open && !board[piece.x][piece.y - 1].team) {
+                            for (int i = 0; i < pieces.size(); ++i) {
+                                if (pieces.get(i) == board[piece.x][piece.y - 1]) {
+                                    past_piece = pieces.get(i);
+                                    pieces.remove(i);
+                                    break;
+                                }
+                            }
+                        }
+                        MakeBoard();
+                        for (Piece p : pieces) {
+                            if (p.type.equals("king") && p.team == Piece.white_turn && threatened[p.x][p.y]) {
+                                piece.x = past_pos[0];
+                                piece.y = past_pos[1];
+                                if (past_piece != null) pieces.add(past_piece);
+                                if (was_start) piece.start = true;
+                                piece.open = false;
+                                MakeBoard();
+                                selected = null;
+                                return;
+                            }
+                        }
+                        past_piece = null;
+                        if (piece.type.equals("pawn") && ((Piece.white_turn && piece.y == 7) || (!Piece.white_turn && piece.y == 0))) {
+                            evolve = new int[]{piece.x, piece.y};
+                            if (Piece.white_turn) {
+                                pieces.add(new Queen(true, piece.x, piece.y));
+                                pieces.add(new Knight(true, piece.x, piece.y - 1));
+                                pieces.add(new Rook(true, piece.x, piece.y - 2));
+                                pieces.add(new Bishop(true, piece.x, piece.y - 3));
+                            } else {
+                                pieces.add(new Queen(false, piece.x, piece.y));
+                                pieces.add(new Knight(false, piece.x, piece.y + 1));
+                                pieces.add(new Rook(false, piece.x, piece.y + 2));
+                                pieces.add(new Bishop(false, piece.x, piece.y + 3));
+                            }
+                        } else {
+                            for (Piece p : pieces) if (p.team != Piece.white_turn && p.type.equals("pawn")) p.open = false;
+                            Piece.white_turn = !Piece.white_turn;
+                        }
+                        MakeBoard();
+                        for (int i = 0; i < 8; ++i) {
+                            for (int j = 0; j < 8; ++j) {
+                                if (board[i][j] != null && board[i][j].type.equals("king") && board[i][j].team == Piece.white_turn
+                                        && !threatened[i][j] && Checkmate(i, j)) {
+                                    g.setColor(Color.GREEN);
+                                    g.setFont(new Font("TimesRoman", Font.PLAIN, 200)); 
+                                    stalemate = true;
+                                    selected = null;
+                                    Piece.moves = null;
+                                    MakeBoard();
+                                }
+                            }
+                        }
+                        for (int i = 0; i < 8; ++i) {
+                            for (int j = 0; j < 8; ++j) {
+                                if (board[i][j] != null && board[i][j].type.equals("king") && threatened[i][j] && Checkmate(i, j)) {
+                                    g.setColor(Color.GREEN);
+                                    g.setFont(new Font("TimesRoman", Font.PLAIN, 200)); 
+                                    game_over = true;
+                                    selected = null;
+                                    Piece.moves = null;
+                                    MakeBoard();
+                                }
+                            }
+                        }
+                        selected = null;
+                        break;
+                    }
+                }
+            }
+            Piece.moves = null;
+            if (selected != null && board[selected[0]][selected[1]] != null && board[selected[0]][selected[1]].team == Piece.white_turn) {
+                board[selected[0]][selected[1]].Move();
+            }
+        }
+        if (selected != null && board[selected[0]][selected[1]] != null && board[selected[0]][selected[1]].team != Piece.white_turn) selected = null;
+    }
+    
+    public boolean Checkmate(int i, int j) {
+        int[] past_pos = new int[2];
+        Piece past_piece = null;
+        int past_piece_index = -1;
+        for (Piece piece : pieces) {
+            if (piece.team == board[i][j].team) {
+                piece.Move();
+                for (int[] move : Piece.moves) {
+                    if (board[move[0]][move[1]] != null) {
+                        for (int k = 0; k < pieces.size(); ++k) {
+                            if (pieces.get(k).x == move[0] && pieces.get(k).y == move[1]) {
+                                past_piece = pieces.get(k);
+                                past_piece_index = k;
+                                pieces.set(k, null);
+                                break;
+                            }
+                        }
+                    }
+                    past_pos[0] = piece.x;
+                    past_pos[1] = piece.y;
+                    piece.x = move[0];
+                    piece.y = move[1];
+                    if (piece.type.equals("pawn") && piece.y < 7 && board[piece.x][piece.y + 1] != null && 
+                            board[piece.x][piece.y + 1].open && board[piece.x][piece.y + 1].team) {
+                        for (int k = 0; k < pieces.size(); ++k) {
+                            if (pieces.get(k) == board[piece.x][piece.y + 1]) {
+                                past_piece = pieces.get(k);
+                                past_piece_index = k;
+                                pieces.set(k, null);
+                                break;
+                            }
+                        }
+                    } else if (piece.type.equals("pawn") && piece.y > 0 && board[piece.x][piece.y - 1] != null && 
+                            board[piece.x][piece.y - 1].open && !board[piece.x][piece.y - 1].team) {
+                        for (int k = 0; k < pieces.size(); ++k) {
+                            if (pieces.get(k) == board[piece.x][piece.y - 1]) {
+                                past_piece = pieces.get(k);
+                                past_piece_index = k;
+                                pieces.set(k, null);
+                                break;
+                            }
+                        }
+                    }
+                    FindThreats();
+                    for (Piece p : pieces) {
+                        if (p != null && p.type.equals("king") && p.team == Piece.white_turn) {
+                            MakeBoard();
+                            if (!threatened[p.x][p.y]) {
+                                piece.x = past_pos[0];
+                                piece.y = past_pos[1];
+                                if (past_piece != null) pieces.set(past_piece_index, past_piece);
+                                MakeBoard();
+                                return false;
+                            }
+                            piece.x = past_pos[0];
+                            piece.y = past_pos[1];
+                            if (past_piece != null) pieces.set(past_piece_index, past_piece);
+                            break;
+                        }
+                    }
+                    past_piece = null;
+                    past_piece_index = -1;
+                }
+            }
+        }
+        return true;
+    }
+    
+    public void FindThreats() {
+        threatened = new boolean[8][8];
+        for (Piece piece : pieces) {
+            if (piece != null && piece.team != Piece.white_turn) {
+                Piece.moves = null;
+                piece.Threaten();
+                for (int[] loc : Piece.moves) threatened[loc[0]][loc[1]] = true;
+            }
+        }
+        Piece.moves = null;
+    }
+    
+    void MakeBoard() {
+        board = new Piece[8][8];
+        for (Piece piece : pieces) if (piece != null) board[piece.x][piece.y] = piece;
+        FindThreats();
+    }
+    
+    public int[] HoveringOver() {
+        int i = animator.mouse_point.x - 59 - (animator.width - animator.height) / 2;
+        int j = animator.mouse_point.y - 57;
+        int x = (int)Math.floor((double)i / width);
+        int y = 7 - (int)Math.floor((double)j / height);
+        if (x < 0 || y < 0 || x > 7 || y > 7) return null;
+        return new int[]{x, y};
+    }
+    
+    public static int[] ComputeLocation(int x_, int y_) {
+        return new int[]{(int)((x_ + 0.5) * width + 59 + (animator.width - animator.height) / 2), (int)((7 - y_ + 0.5) * height + 57)};
+    }
+    
+    public static abstract class Piece {
+        boolean team;
+        int x, y;
+        Sprite sprite;
+        String type;
+        boolean start = true;
+        boolean open = false;
+        static boolean white_turn = true;
+        static ArrayList<int[]> moves;
+        
+        Piece(boolean team_, int x_, int y_, String type_) {
+            team = team_;
+            x = x_;
+            y = y_;
+            type = type_;
+        }
+        
+        public void Draw() {
+            int[] location = ComputeLocation(x, y);
+            sprite.x = location[0];
+            sprite.y = location[1];
+            sprite.StepAndDraw();
+        }
+        
+        public void LineSearch(int xv, int yv, boolean team_) {
+            for (int i = 1; ; ++i) {
+                int j = Search(xv * i, yv * i, team_);
+                if (j == 0 || j == 2) break;
+            }
+        }
+        
+        //output 0=out of bounds 1=empty 2=filled
+        public int Search(int xv, int yv, boolean team_) {
+            int tempx = x + xv;
+            int tempy = y + yv;
+            if (tempx < 0 || tempx > 7 || tempy < 0 || tempy > 7) return 0;
+            if (board[tempx][tempy] != null) {
+                if (board[tempx][tempy].team != team_){
+                    moves.add(new int[]{tempx, tempy});
+                }
+                return 2;
+            } else {
+                moves.add(new int[]{tempx, tempy});
+                return 1;
+            }
+        }
+        
+        public abstract void Move();
+        public abstract void Threaten();
+    }
+    
+    public static class Pawn extends Piece {
+        static Sprite white = null;
+        static Sprite black = null;
+        
+        Pawn(boolean team_, int x_, int y_) {
+            super(team_, x_, y_, "pawn");
+            if (white == null) white = new Sprite(null, "Images\\White_Pawn.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            if (black == null) black = new Sprite(null, "Images\\Black_Pawn.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            sprite = team? white : black;
+        }
+        
+        @Override
+        public void Move() {
+            moves = new ArrayList<>();
+            int direction = team? 1 : -1;
+            if (board[x][y + direction] == null) {
+                moves.add(new int[]{x, y + direction});
+                if (start && board[x][y + direction * 2] == null) moves.add(new int[]{x, y + direction * 2});
+            }
+            if (x > 0 && ((board[x - 1][y + direction] != null && board[x - 1][y + direction].team != team) || 
+                    (board[x - 1][y] != null && board[x - 1][y].team != team && board[x - 1][y].open))) {
+                moves.add(new int[]{x - 1, y + direction});
+            }
+            if (x < 7 && ((board[x + 1][y + direction] != null && board[x + 1][y + direction].team != team) || 
+                    (board[x + 1][y] != null && board[x + 1][y].team != team && board[x + 1][y].open))) {
+                moves.add(new int[]{x + 1, y + direction});
+            }
+        }
+        
+        @Override
+        public void Threaten() {
+            moves = new ArrayList<>();
+            int direction = team? 1 : -1;
+            Search(-1, direction, team);
+            Search(1, direction, team);
+        }
+    }
+    
+    public static class Rook extends Piece {
+        static Sprite white = null;
+        static Sprite black = null;
+        
+        Rook(boolean team_, int x_, int y_) {
+            super(team_, x_, y_, "rook");
+            if (white == null) white = new Sprite(null, "Images\\White_Rook.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            if (black == null) black = new Sprite(null, "Images\\Black_Rook.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            sprite = team? white : black;
+        }
+        
+        @Override
+        public void Move() {
+            moves = new ArrayList<>();
+            LineSearch(1, 0, team);
+            LineSearch(0, 1, team);
+            LineSearch(-1, 0, team);
+            LineSearch(0, -1, team);
+        }
+        
+        @Override
+        public void Threaten() {
+            Move();
+        }
+    }
+    
+    public static class Bishop extends Piece {
+        static Sprite white = null;
+        static Sprite black = null;
+        
+        Bishop(boolean team_, int x_, int y_) {
+            super(team_, x_, y_, "bishop");
+            if (white == null) white = new Sprite(null, "Images\\White_Bishop.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            if (black == null) black = new Sprite(null, "Images\\Black_Bishop.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            sprite = team? white : black;
+        }
+        
+        @Override
+        public void Move() {
+            moves = new ArrayList<>();
+            LineSearch(1, 1, team);
+            LineSearch(1, -1, team);
+            LineSearch(-1, 1, team);
+            LineSearch(-1, -1, team);
+        }
+        
+        @Override
+        public void Threaten() {
+            Move();
+        }
+    }
+    
+    public static class Queen extends Piece {
+        static Sprite white = null;
+        static Sprite black = null;
+        
+        Queen(boolean team_, int x_, int y_) {
+            super(team_, x_, y_, "queen");
+            if (white == null) white = new Sprite(null, "Images\\White_Queen.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            if (black == null) black = new Sprite(null, "Images\\Black_Queen.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            sprite = team? white : black;
+        }
+        
+        @Override
+        public void Move() {
+            moves = new ArrayList<>();
+            LineSearch(1, 0, team);
+            LineSearch(0, 1, team);
+            LineSearch(-1, 0, team);
+            LineSearch(0, -1, team);
+            LineSearch(1, 1, team);
+            LineSearch(1, -1, team);
+            LineSearch(-1, 1, team);
+            LineSearch(-1, -1, team);
+        }
+        
+        @Override
+        public void Threaten() {
+            Move();
+        }
+    }
+    
+    public static class King extends Piece {
+        static Sprite white = null;
+        static Sprite black = null;
+        
+        King(boolean team_, int x_, int y_) {
+            super(team_, x_, y_, "king");
+            if (white == null) white = new Sprite(null, "Images\\White_King.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            if (black == null) black = new Sprite(null, "Images\\Black_King.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            sprite = team? white : black;
+        }
+        
+        @Override
+        public void Move() {
+            moves = new ArrayList<>();
+            Search(1, 0, team);
+            Search(0, 1, team);
+            Search(-1, 0, team);
+            Search(0, -1, team);
+            Search(1, 1, team);
+            Search(1, -1, team);
+            Search(-1, 1, team);
+            Search(-1, -1, team);
+            if (this.start) {
+                if (board[this.x + 3][this.y] != null && board[this.x + 3][this.y].type.equals("rook") && board[this.x + 3][this.y].start) {
+                    if (!threatened[this.x][this.y] && !threatened[this.x + 1][this.y] && !threatened[this.x + 2][this.y] && 
+                            board[this.x + 1][this.y] == null && board[this.x + 2][this.y] == null) {
+                        Search(2, 0, team);
+                    }
+                }
+                if (board[this.x - 4][this.y] != null && board[this.x - 4][this.y].type.equals("rook") && board[this.x - 4][this.y].start) {
+                    if (!threatened[this.x][this.y] && !threatened[this.x - 1][this.y] && !threatened[this.x - 2][this.y] && 
+                            board[this.x - 1][this.y] == null && board[this.x - 2][this.y] == null && board[this.x - 3][this.y] == null) {
+                        Search(-2, 0, team);
+                    }
+                }
+            }
+        }
+        
+        @Override
+        public void Threaten() {
+            moves = new ArrayList<>();
+            Search(1, 0, team);
+            Search(0, 1, team);
+            Search(-1, 0, team);
+            Search(0, -1, team);
+            Search(1, 1, team);
+            Search(1, -1, team);
+            Search(-1, 1, team);
+            Search(-1, -1, team);
+        }
+    }
+    
+    public static class Knight extends Piece {
+        static Sprite white = null;
+        static Sprite black = null;
+        
+        Knight(boolean team_, int x_, int y_) {
+            super(team_, x_, y_, "knight");
+            if (white == null) white = new Sprite(null, "Images\\White_Knight.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            if (black == null) black = new Sprite(null, "Images\\Black_Knight.png", 0.5, 0.5, 0., 0.7, 0.7, 1,  0, "");
+            sprite = team? white : black;
+        }
+        
+        @Override
+        public void Move() {
+            moves = new ArrayList<>();
+            Search(-1, 2, team);
+            Search(1, 2, team);
+            Search(-1, -2, team);
+            Search(1, -2, team);
+            Search(2, 1, team);
+            Search(2, -1, team);
+            Search(-2, 1, team);
+            Search(-2, -1, team);
+        }
+        
+        @Override
+        public void Threaten() {
+            Move();
+        }
+    }
+    
+}
