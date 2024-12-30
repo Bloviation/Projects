@@ -1,0 +1,1008 @@
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import javax.imageio.ImageIO;
+
+public class GlobLevelEditor {
+    
+    public static void main(String[] args) {
+        GlobLevelEditor gle = new GlobLevelEditor();
+        animator = new Animator(gle, 0, 0, "action", false);
+        animator.mouse3pop = false;
+        glob = new Glob();
+        glob.Init_action();
+        animator.Animate();
+    }
+    
+    final double projection_scale = 0.75;
+    final double projection_width = 0.5;
+    final double projection_height = 0.485;
+    final int font_sizes = 50;
+    final int thumb_size = 98;
+    
+    static Animator animator;
+    static Glob glob;
+    
+    String[] option_strings;
+    ArrayList<Sprite> options;
+    static ArrayList<String> biome_names;
+    ArrayList<Sprite> biome_contents;
+    Graphics2D projector_graphics, dirty_graphics;
+    BufferedImage bi, clean_image, dirty_image;
+    Sprite projector_sprite;
+    Sprite button, tnt;
+    Sprite variable, variable_entry, variable_copy;
+    Sprite wand;
+    Sprite sparkle;
+    Sprite elephant, alfred;
+    Rectangle grid, saved_grid;
+    double grid_angle, saved_grid_angle;
+    boolean grid_mode;
+    int variable_type, variable_copy_type;
+    int biome;
+    int wheel;
+    int room;
+    int right_picked;
+    int left_picked;
+    int horizontal_scroll;
+    int vertical_scroll;
+    int current_mini_save;
+    boolean started;
+    int toggle;
+    boolean init = false;
+    boolean ending = false;
+    boolean ending_save = false;
+    boolean all = false;
+    double wanding_counter;
+    double diffx, diffy;
+    double refx, refy;
+    double timer;
+    double min_dist;
+    double dragging_counter;
+    String[] rooms_symbol;
+    int[] rooms_width, rooms_height;
+    boolean mousePressed1, mouseTouched1, mouseTyped1, mouseTouched2, mouseTouched3;
+    TextRects textRects;
+    
+    void Init_action() {
+        Sprite.mark_center = false;
+        animator = Animator.o;
+        animator.nokeys.add(KeyEvent.VK_ESCAPE);
+        animator.nokeys.add(KeyEvent.VK_SHIFT);
+        animator.nokeys.add(KeyEvent.VK_SPACE);
+        animator = Animator.o;
+        Sprite.allow_flip = false;
+        grid = new Rectangle(0, 0, 64, 64);
+        grid_angle = 0.;
+        grid_mode = false;
+        saved_grid = new Rectangle(0, 0, 64, 64);
+        saved_grid_angle = 0.;
+        mousePressed1 = mouseTouched1 = mouseTouched2 = mouseTouched3 = false;
+        biome_names = new ArrayList<>(Arrays.asList("Common", "Forest", "Sky",
+                "Ocean", "Factory", "Desert", "Colosseum", "MagicForest", "Mines"));
+        options = new ArrayList();
+        biome_contents = new ArrayList();
+        AddOption("../zodiac/Forest_Backgrounds/heart_of_the_forest.jpg" ,0.);
+        AddOption("../zodiac/Factory_Obstacles/metal_block.jpg" ,0.);
+        AddOption("../zodiac/Forest_Climbables/vine.png" ,1.5 * Math.PI);
+        AddOption("../zodiac/Desert_Items/cactus_fruit.png" ,0.);
+        AddOption("../zodiac/Forest_Enemies/Bee.png" ,0.);
+        AddOption("../zodiac/Factory_Foregrounds/alarm_eye.png" ,0.);
+        AddOption("../zodiac/Extras/exit.png" ,0.);
+        option_strings = new String[] {"Backgrounds", "Obstacles", "Climbables", "Items", "Enemies", "Foregrounds", "Doors"};
+        button = new Sprite(null, "../zodiac/Extras/Big_green_button.png", 0.5, 0.5, 0., 0.5, 0.5, 1,  1, "save", false);
+        tnt = new Sprite(null, "../zodiac/Extras/TNT.png", 0.5, 0.5, 0., 0.2, 0.2, 1,  1, "delete", false);
+        button.x = animator.width - 150;
+        button.y = animator.height - 50;
+        tnt.x = animator.width - 50;
+        tnt.y = animator.height - 50;
+        room = glob.suit.room;
+        biome = room / 100;
+        wheel = 0;
+        horizontal_scroll = 0;
+        vertical_scroll = 0;
+        variable = variable_entry = null;
+        started = true;
+        toggle = 0;
+        current_mini_save = 0;
+        wand = new Sprite(null, "../zodiac/Extras/magic_wand.png", 0., 0.5, 0., 0.783, 1., 1,  1, "wand", false);
+        bi = new BufferedImage(animator.width, animator.height, BufferedImage.TYPE_INT_ARGB);
+        projector_graphics = bi.createGraphics();
+        projector_graphics.setColor(Color.CYAN);
+        projector_graphics.fillRect(0, 0, animator.width, animator.height);
+        projector_sprite = new Sprite(bi, "", 0.5, 0.5, 0, 1., 1., 1,  1, "projector", false);
+        projector_sprite.scale_x = projector_sprite.scale_y = projection_scale;
+        projector_sprite.x = projection_width * animator.width;
+        projector_sprite.y = projection_height * animator.height;
+        timer = 1;
+        elephant = new Sprite(null, "../zodiac/Extras/elephant.png", 0., 1., 0, 0.65, 0.65, 1,  1, "elephat", false);
+        elephant.x = animator.width - 2 * elephant.image.getWidth();
+        elephant.y = animator.height;
+        alfred = new Sprite(null, "../zodiac/Extras/WhatMeWorry.png", 0., 1., 0, 0.8, 0.8, 1,  1, "alfred", false);
+        alfred.x = animator.width - alfred.image.getWidth();
+        alfred.y = animator.height;
+        rooms_symbol = new String[]{ "+1*1", "+2*1", "+1*2", "+2*2"};
+        rooms_width = new int[]{animator.width, 2 * animator.width, animator.width, 2 * animator.width};
+        rooms_height = new int[]{animator.height, animator.height, 2 * animator.height, 2 * animator.height};
+        textRects = animator.new TextRects(new Font("Helvetica", Font.BOLD, font_sizes));
+    }
+    
+    double ProjectX(double x, boolean inverse) {
+        if (inverse) return (x - projection_width * animator.width) / projection_scale + animator.width / 2;
+        return (x - animator.width / 2) * projection_scale + projection_width * animator.width;
+    }
+    double ProjectY(double y, boolean inverse) {
+        if (inverse) return (y - projection_height * animator.height) / projection_scale + animator.height / 2;
+        return (y - animator.height / 2) * projection_scale + projection_height * animator.height;
+    }
+
+    void Foreground_action() {
+        glob.room = room;
+        // mouse info
+        boolean mouse_helper = animator.MousePressed(1);
+        mouseTouched1 = mouse_helper && !mousePressed1;
+        mouseTyped1 = !mouse_helper && mousePressed1;
+        mousePressed1 = mouse_helper;
+        mouseTouched2 = animator.MouseTyped(2);
+        mouseTouched3 = animator.MouseTyped(3);
+        wheel = animator.WheeledReset();
+        double mx = ProjectX(animator.mouse_point.x, true);
+        double my = ProjectY(animator.mouse_point.y, true);
+        if (mouseTouched1) {
+            refx = mx;
+            refy = my;
+        }
+        boolean inside = mx >= 0 && my >= 0 && mx < animator.width && my < animator.height;
+        
+        // graphics
+        boolean roomshot = animator.Typed(KeyEvent.VK_P);
+        Graphics2D g = animator.graphics;
+        g.setColor(Color.CYAN);
+        g.fillRect(0, 0, animator.width, animator.height);
+        if (!roomshot) {
+            projector_graphics.setColor(Color.CYAN);
+            projector_graphics.fillRect(0, 0, animator.width, animator.height);
+        } else {
+            for (int i = 0; i < bi.getWidth(); ++i) {
+                for (int j = 0; j < bi.getHeight(); ++j) bi.setRGB(i, j, 0);
+            }
+        }
+        
+        if ((glob.width > animator.width) || (glob.height > animator.height)) {
+            double dx = animator.mouse_point.x - ProjectX(animator.width, false);
+            double dy = animator.mouse_point.y - ProjectY(animator.height, false);
+            if (mouseTyped1 && ((dx > 0.) || (dy > 0.)) && (dx * dx + dy * dy < 400)) {
+                all = !all;
+                Sprite.Tran(glob.background, all);
+            }
+            g.setColor(Color.orange);
+            g.fillOval((int)ProjectX(animator.width, false) - 20, (int)ProjectY(animator.height, false) - 20, 40, 40);
+        }
+        if (all) {
+            DrawPick(0, glob.backgrounds, false, false, mx, my);
+            DrawPick(5, glob.foregrounds, true, false, mx, my);
+            DrawPick(5, glob.foregrounds, false, false, mx, my);
+            DrawPick(1, glob.obstacles, false, false, mx, my);
+            DrawPick(2, glob.climbables, false, false, mx, my);
+            DrawPick(3, glob.items, false, false, mx, my);
+            DrawPick(4, glob.enemies, false, false, mx, my);
+            DrawPick(6, glob.doors, false, false, mx, my);
+            projector_sprite.StepAndDraw();
+            animator.keys.clear();
+            return;
+        }
+        
+        g.setColor(Color.red);
+        if (glob.width > animator.width)
+            g.fillOval((int)ProjectX((1. - Sprite.tran_x / (glob.width - animator.width)) * animator.width, false) - 10,
+                    (int)ProjectY(0., false) - 10, 20, 20);
+        if (glob.height > animator.height)
+            g.fillOval((int)ProjectX(0., false) - 10,
+                    (int)ProjectY((1. - Sprite.tran_y / (glob.height - animator.height)) * animator.height, false) - 10, 20, 20);
+        
+        // chosse biom
+        int touched = ButtonStrings(biome, biome_names, font_sizes, 25, 50, Color.magenta, Color.green, true);
+        if (started) touched = biome;
+        if (mouseTouched1 && touched >= 0) {
+            variable = null;
+            started = true;
+            biome = touched;
+            room = -1;
+            left_picked = -1;
+            right_picked = 0;
+            glob.width = animator.width;
+            glob.height = animator.height;
+        }
+        
+        // room statistics
+        ArrayList<String> biome_rooms = new ArrayList<>();
+        for (int r : glob.backgrounds.keySet()) {
+            if (r / 100 == biome) biome_rooms.add(String.valueOf(r));
+        }
+        for (String str : rooms_symbol) biome_rooms.add(str);
+        int available_room = biome * 100;
+        while (biome_rooms.contains(String.valueOf(available_room))) ++available_room;
+        if (room < 0) room = available_room;
+        int room_index = -1;
+        for (int i = 0; i < biome_rooms.size(); ++i) {
+            if (biome_rooms.get(i).equals(String.valueOf(room))) room_index = i;
+        }
+        
+        // choose room
+        touched = ButtonStrings(room_index, biome_rooms, font_sizes, 25, 100, Color.magenta, Color.green, false);
+        if (mouseTouched1 && touched >= 0) {
+            variable = null;
+            if (touched < biome_rooms.size() - rooms_symbol.length) {
+                room = Integer.valueOf(biome_rooms.get(touched));
+            } else {
+                int ind = touched - biome_rooms.size() + rooms_symbol.length;
+                room = available_room;
+                BufferedImage image = new BufferedImage(rooms_width[ind], rooms_height[ind], BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g2 = image.createGraphics();
+                g2.setColor(Color.CYAN);
+                g2.fillRect(0, 0, image.getWidth(), image.getHeight());
+                Sprite sprite = new Sprite(image, "../zodiac/" + biome_names.get(biome)+ "_Backgrounds/starting",
+                        0.5, 0.5, 0, 1., 1., 2,  1, "starting_background");
+                sprite.PutInt("room", room);
+                glob.AddBackground(sprite);
+            }
+        }
+        if (started || (mouseTouched1 && touched >= 0)) {
+            glob.room = room;
+            glob.RoomSize();
+            Sprite.Tran(glob.background, all);
+            all = false;
+            Sprite.Tran(glob.background, all);
+        }
+        
+        // choose sprite type
+        touched = ButtonSprites(right_picked, options, (int)(animator.width * 0.94), 175, Color.BLACK, false);
+        if (started) touched = 0;
+        if ((mouseTouched1 || started) && (touched >= 0)) {
+            right_picked = touched;
+            left_picked = -1;
+            vertical_scroll = 0;
+            biome_contents.clear();
+            AddBiomeContent("zodiac/" + biome_names.get(biome)+ "_" + option_strings[right_picked], true);
+            if (biome != 0 && right_picked != 5) AddBiomeContent("zodiac/Common_" + option_strings[right_picked], false);
+        }
+        
+        // choose and add new sprite
+        if (biome_contents.size() > 0) {
+            touched = ButtonSprites(left_picked, biome_contents, (int)(animator.width * 0.06), 175, Color.BLACK, true);
+            if (mouseTouched1 && touched >= 0) {
+                left_picked = touched;
+                String path = biome_contents.get(left_picked).path;
+                Sprite sprite = null;
+                if (right_picked == 0) {
+                    double factor_x = glob.width / (double)animator.width;
+                    double factor_y = glob.height / (double) animator.height;
+                    sprite = new Sprite(null, path, 0.5, 0.5, 0, factor_x, factor_y, 2, 1, "background");
+                    sprite.PutInt("room", room);
+                    glob.AddBackground(sprite);
+                } else if (right_picked == 1) {
+                    sprite = new Sprite(null, path, 0.5, 0.5, 0, 1., 1., 1,  1, "obstacle");
+                    sprite.PutInt("room", room);
+                    glob.AddGeneral(sprite, glob.obstacles);
+                } else if (right_picked == 2) {
+                    sprite = new Sprite(null, path, 0.5, 0.5, 0, 1., 1., 1,  1, "climbable");
+                    sprite.PutInt("room", room);
+                    glob.AddGeneral(sprite, glob.climbables);
+                } else if (right_picked == 3) {
+                    sprite = new Sprite(null, path, 0.5, 0.5, 0, 1., 1., 1,  1, "item");
+                    sprite.PutInt("room", room);
+                    glob.AddGeneral(sprite, glob.items);
+                } else if (right_picked == 4) {
+                    sprite = new Sprite(null, path, 0.5, 0.5, 0, 1., 1., 1,  1, "enemy");
+                    sprite.PutInt("room", room);
+                    sprite.health = 1.;
+                    glob.AddGeneral(sprite, glob.enemies);
+                } else if (right_picked == 5) {
+                    sprite = new Sprite(null, path, 0.5, 0.5, 0, 1., 1., 1,  1, "foreground");
+                    sprite.PutInt("room", room);
+                    glob.AddGeneral(sprite, glob.foregrounds);
+                } else if (right_picked == 6) {
+                    sprite = new Sprite(null, path, 0.5, 1., 0., 1., 1., 1,  1, "door");
+                    sprite.PutInt("room", room);
+                    glob.AddDoor(sprite);
+                }
+                if (sprite != null) {
+                    sprite.x = animator.width / 2 + Sprite.tran_x;
+                    sprite.y = animator.height / 2 + Sprite.tran_y;
+                }
+            }
+        }
+        
+        // draw amd pick sprite
+        if (mouseTouched1 && inside) variable = null;
+        min_dist = 9e9;
+        if (!roomshot) DrawPick(0, glob.backgrounds, false, mouseTouched1 && inside, mx, my);
+        DrawPick(5, glob.foregrounds, true, mouseTouched1 && inside, mx, my);
+        DrawPick(5, glob.foregrounds, false, mouseTouched1 && inside, mx, my);
+        DrawPick(1, glob.obstacles, false, mouseTouched1 && inside, mx, my);
+        DrawPick(2, glob.climbables, false, mouseTouched1 && inside, mx, my);
+        DrawPick(3, glob.items, false, mouseTouched1 && inside, mx, my);
+        DrawPick(4, glob.enemies, false, mouseTouched1 && inside, mx, my);
+        DrawPick(6, glob.doors, false, mouseTouched1 && inside, mx, my);
+        if ((variable != null) && (variable.GetInt("room") != room)) variable = null;
+        boolean invar = (variable != null) && (variable_type != 0);
+
+        // update variable_entry
+        if (mouseTouched1 && inside) {
+            if (invar && variable_type != 0) {
+                variable_copy = variable;
+                variable_copy_type = variable_type;
+            }
+            if ((variable != null) && variable.id.equals("door")) {
+                if (variable_entry == null) {
+                    variable_entry = variable;
+                } else {
+                    if (variable_entry != variable) variable_entry.next_sprite = variable;
+                    variable_entry = null;
+                }
+            } else if ((variable == null) || (variable_type != 0)) {
+                variable_entry = null;
+            }
+        }
+        
+        // flip sprite or snap doors into place
+        if (mouseTouched2 && variable != null) {
+            if (variable_type != 6) {
+                variable.FlipDirX();
+            } else {
+                double qx = variable.x / glob.width;
+                double qy = variable.y / glob.height;
+                boolean b1 = qx > qy;
+                boolean b2 = qx + qy > 1.;
+                if (b1 && b2) {
+                    variable.angle = -0.5 * Math.PI;
+                    variable.scale_x = glob.height / (double)variable.image.getWidth();
+                    variable.x = glob.width;
+                    variable.y = glob.height / 2;
+                } else if (!b1 && !b2) {
+                    variable.angle = 0.5 * Math.PI;
+                    variable.scale_x = glob.height / (double)variable.image.getWidth();
+                    variable.x = 0;
+                    variable.y = glob.height / 2;
+                } else if (b1 && !b2) {
+                    variable.angle = 0.;
+                    variable.scale_x = glob.width / (double)variable.image.getWidth();
+                    variable.x = glob.width / 2;
+                    variable.y = 0;
+                } else if (!b1 && b2) {
+                    variable.angle = Math.PI;
+                    variable.scale_x = glob.width / (double)variable.image.getWidth();
+                    variable.x = glob.width / 2;
+                    variable.y = glob.height - 0;
+                }
+                variable.scale_y = glob.door_rat * Math.sqrt(variable.scale_x);
+            }
+        }
+                
+        // change size + angle of sprite
+        if (mouseTouched3) ++toggle;
+        toggle %= (grid_mode? 5 : 4);
+        if (variable_entry == null) {
+            int[] cursors = new int[]{13, 1, 11, 8, 12, 0};
+            animator.SetCursor(cursors[toggle]);
+        } else {
+            animator.SetCursor(3);
+        }
+        if (wheel == 0) {
+            timer -= 10 * animator.frame_time;
+            timer = Math.max(1, timer);
+        } else {
+            timer += 30 * animator.frame_time;
+            timer = Math.min(50, timer);
+        }
+        double zadd = 0.005 * Math.PI * wheel * (int)timer;
+        double zmult = Math.exp(-2 * zadd);
+        if (invar) {
+            if (toggle == 0) {
+                variable.scale_x *= zmult;
+                variable.scale_y *= zmult;
+            } else if (toggle == 1) {
+                variable.angle -= zadd;
+            } else if (toggle == 2) {
+                variable.scale_x *= zmult;
+            } else if (toggle == 3){
+                variable.scale_y *= zmult;
+            }
+            if (variable.id.equals("door")) {
+                variable.scale_y = glob.door_rat * Math.sqrt(Math.abs(variable.scale_x));
+            }
+        } else if (grid_mode) {
+            if (toggle == 0) {
+                grid.width = Math.max(12, Math.min(animator.height/2 - 1, (int)(grid.width * zmult)));
+                grid.height = Math.max(12, Math.min(animator.height/2 - 1, (int)(grid.height * zmult)));
+            } else if (toggle == 1) {
+                grid_angle -= zadd;
+            } else if (toggle == 2) {
+                grid.width = Math.max(12, Math.min(animator.height/2 - 1, (int)(grid.width * zmult)));
+            } else if (toggle == 3){
+                grid.height = Math.max(12, Math.min(animator.height/2 - 1, (int)(grid.height * zmult)));
+            }
+        }
+        
+        if (animator.Typed(KeyEvent.VK_G)) grid_mode = !grid_mode;
+        if (variable_entry != null) grid_mode = false;
+        if (animator.Typed(KeyEvent.VK_H) && grid_mode) {
+            grid = new Rectangle(saved_grid);
+            grid_angle = saved_grid_angle;
+        }
+        if (animator.Typed(KeyEvent.VK_F) && grid_mode) {
+            saved_grid = new Rectangle(grid);
+            saved_grid_angle = grid_angle;
+        }
+        
+        // Sbap to grid
+        if (!mousePressed1 && grid_mode && invar) {
+            if (toggle == 0) {
+                Snap(true, true);
+            } else if (toggle == 1) {
+                double da = (grid_angle - variable.angle) * 2 / Math.PI;
+                da -= Math.floor(da + 0.5);
+                variable.angle += da * 0.5 * Math.PI;
+            } else if (toggle == 2) {
+                Snap(true, false);
+            } else if (toggle == 3){
+                Snap(false, true);
+            }
+        }
+        
+        if (toggle == 4) DeSnap();
+        
+        // drag
+        dragging_counter -= animator.frame_time;
+        if (mouseTouched1) dragging_counter = 0.5;
+        if (mousePressed1 && (dragging_counter < 0.)) {
+            if (toggle != 4) {
+                if ((variable != null) && inside) {
+                    if (variable_type != 0) {
+                        variable.x = mx + diffx + Sprite.tran_x;
+                        variable.y = my + diffy + Sprite.tran_y;
+                    } else {
+                        double tx = Sprite.tran_x;
+                        double ty = Sprite.tran_y;
+                        Sprite.tran_x = variable.x - mx - diffx;
+                        Sprite.tran_y = variable.y - my - diffy;
+                        Sprite.tran_x = Math.max(0, Math.min(glob.width - animator.width, Sprite.tran_x));
+                        Sprite.tran_y = Math.max(0, Math.min(glob.height - animator.height, Sprite.tran_y));
+                        grid.x += tx - Sprite.tran_x;
+                        grid.y += ty - Sprite.tran_y;
+                    }
+                }
+            } else {
+                grid.x += (int)(mx - refx);
+                grid.y += (int)(my - refy);
+                refx = mx;
+                refy = my;
+            }
+        }
+        if (animator.Typed(KeyEvent.VK_RIGHT)) grid.x += 1;
+        if (animator.Typed(KeyEvent.VK_LEFT)) grid.x -= 1;
+        if (animator.Typed(KeyEvent.VK_UP)) grid.y -= 1;
+        if (animator.Typed(KeyEvent.VK_DOWN)) grid.y += 1;
+        
+        // copy sprite
+        if  (animator.Typed(KeyEvent.VK_V) && (variable_copy != null)) {
+            variable = variable_copy.clone();
+            variable_type = variable_copy_type;
+            variable.Remove("align");
+            variable.PutInt("room", room);
+            variable.x = mx + Sprite.tran_x;
+            variable.y = my + Sprite.tran_y;
+            if (variable_type == 1) {
+                glob.AddGeneral(variable, glob.obstacles);
+            } else if (variable_type == 2) {
+                glob.AddGeneral(variable, glob.climbables);
+            } else if (variable_type == 3) {
+                glob.AddGeneral(variable, glob.items);
+            } else if (variable_type == 4) {
+                glob.AddGeneral(variable, glob.enemies);
+            } else if (variable_copy_type == 5) {
+                glob.AddGeneral(variable, glob.foregrounds);
+            } else if (variable_type == 6) {
+                glob.AddGeneral(variable, glob.doors);
+            }
+        }
+        
+        // remove sprite
+        if (animator.Typed(KeyEvent.VK_DELETE) && invar && (variable_type != 0)) {
+            variable_copy = variable;
+            variable_copy_type = variable_type;
+            glob.GetSprites(glob.backgrounds).remove(variable);
+            glob.GetSprites(glob.obstacles).remove(variable);
+            glob.GetSprites(glob.climbables).remove(variable);
+            glob.GetSprites(glob.items).remove(variable);
+            glob.GetSprites(glob.enemies).remove(variable);
+            glob.GetSprites(glob.foregrounds).remove(variable);
+            glob.GetSprites(glob.doors).remove(variable);
+            variable_entry = variable = null;
+        }
+        
+        // write + read room and sprite info
+        Rectum(mouseTyped1);
+        
+        // draw room + grid
+        if (room >= 0) projector_sprite.StepAndDraw();
+        if (grid_mode) DrawGrid();
+
+        // remove room
+        tnt.StepAndDraw();
+        if (mouseTouched1 && (tnt.Collision(animator.mouse_point.x, animator.mouse_point.y) != null) &&
+                glob.backgrounds.keySet().contains(room)) {
+            animator.Sound("../zodiac/Sounds/Bomb-SoundBible.com-891110113.wav", -10, 1., 1, "boom", 1, 1.);
+            ChangeRoomNumber(room, -1);
+            room = -1;
+            variable_entry = variable = null;
+        }
+        
+        // roomshot
+        if (roomshot) {
+            int minx = Integer.MAX_VALUE, miny = Integer.MAX_VALUE;
+            int maxx = -1, maxy = -1;
+            for (int i = 0; i < bi.getWidth(); ++i) {
+                for (int j = 0; j < bi.getHeight(); ++j) {
+                    if (bi.getRGB(i, j) != 0) {
+                        minx = Math.min(i, minx);
+                        miny = Math.min(j, miny);
+                        maxx = Math.max(i, maxx);
+                        maxy = Math.max(j, maxy);
+                    }
+                }
+            }
+            if ((minx <= maxx) && (miny <= maxy)) {
+                BufferedImage bi2 = new BufferedImage(maxx - minx + 1, maxy - miny + 1,
+                        BufferedImage.TYPE_INT_ARGB);
+                for (int i = 0; i < bi2.getWidth(); ++i) {
+                    for (int j = 0; j < bi2.getHeight(); ++j) {
+                        bi2.setRGB(i, j, bi.getRGB(i + minx, j + miny));
+                    }
+                }
+                String gpath = Animator.CFN("zodiac/Extras/ROOMSHOT.png");
+                File outputfile = new File(gpath);
+                System.out.println("writing " + gpath);
+                try {
+                    ImageIO.write(bi2, "png", outputfile);
+                } catch (IOException ex) {
+                    System.out.println("failed writing " + gpath);
+                    System.exit(2);
+                }
+            }
+        }
+        
+        // ending
+        if (animator.Typed(KeyEvent.VK_ESCAPE) && !ending_save) ending = true;
+        if (ending) {
+            if ((glob.last_file_number < 0) || (mouseTouched1 && alfred.Collision(animator.mouse_point.x, animator.mouse_point.y) != null)) {
+                ending_save = false;
+                animator.nokeys.remove(KeyEvent.VK_ESCAPE);
+                animator.SetKey(KeyEvent.VK_ESCAPE);
+            } else if (mouseTouched1 && elephant.Collision(animator.mouse_point.x, animator.mouse_point.y) != null) {
+                ending_save = true;
+            }
+        }
+        
+        // save all + set wand buttonisplay
+        button.StepAndDraw();
+        if ((mouseTouched1 && button.Collision(animator.mouse_point.x, animator.mouse_point.y) != null) ||
+                (ending && ending_save)) {
+            ending = false;
+            glob.suit.room = room;
+            animator.Sound("../zodiac/Sounds/TaDa.wav", -10, 1., 1, "tada", 1, 0.);
+            wanding_counter = 2.5;
+            wand.angle = Math.PI;
+            clean_image = Animator.DeepCopy(animator.image);
+            dirty_image = Animator.DeepCopy(clean_image);
+            dirty_graphics = dirty_image.createGraphics();
+            sparkle = new Sprite(null, "../zodiac/Extras/sparkle.png", .5, 0.5, 0., 0.5, 0.5, 1,  1, "wand", false);
+            animator.SetFade(5., 32);
+        }
+        
+        if (ending) {
+            elephant.StepAndDraw();
+            alfred.StepAndDraw();
+        }
+        if (ending_save && (wanding_counter <= 0.)) {
+            animator.nokeys.remove(KeyEvent.VK_ESCAPE);
+            animator.SetKey(KeyEvent.VK_ESCAPE);
+        }
+        
+        // wand display
+        if (wand.angle > 0) {
+            wand.x = animator.width / 2;
+            wand.y = projector_sprite.y + projector_sprite.scale_x * projector_sprite.image.getHeight() / 2;
+            double wa = wand.angle - 2 * animator.frame_time;
+            if ((wand.angle >= 2.) && (wa < 2.)) {
+                String allstr = glob.SaveToString(false);
+                Animator.WriteString(null, "zodiac/Grasslands_Data/data_" +
+                        String.valueOf(glob.last_file_number + 1), allstr);
+                ++glob.last_file_number;
+                animator.Sound("../zodiac/Sounds/TaDa.wav", -10, 1., 1, "tada", 1, 0.);
+            }
+            wand.angle = wa;
+            sparkle.x = wand.x + wand.image.getWidth() * Math.cos(wand.angle);
+            sparkle.y = wand.y - wand.image.getWidth() * Math.sin(wand.angle);
+            sparkle.StepAndDraw(dirty_graphics);
+            g.drawImage(dirty_image, 0, 0, null);
+            wand.StepAndDraw();
+            animator.Fade(dirty_graphics, clean_image);
+        } else if (wanding_counter > 0.) {
+            wanding_counter -= animator.frame_time;
+            g.drawImage(dirty_image, 0, 0, null);
+            animator.Fade(dirty_graphics, clean_image);
+        }
+        
+        // Into game
+        if (animator.Typed(116)) {
+            glob.Init_action();
+            glob.prev_room = glob.suit.room = Math.max(100, room);
+            glob.room = 3;
+            glob.default_player_name = null;
+            glob.last_file_number = -2;
+            glob.player_name = null;
+            Sprite.allow_flip = true;
+            animator.myclass = glob;
+            animator.modes = new String[] {"action"};
+            animator.textArea = null;
+        }
+
+        started = false;
+    }
+    
+    void AddOption(String path, double angle) {
+        options.add(new Sprite(null, path, 0.5, 0.5, angle,
+                thumb_size, thumb_size, 0, 1, "option", false));
+    }
+    
+    void AddBiomeContent(String name, boolean with_backgrounds) {
+        File dir = new File(name);
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (int j = 0; j < files.length; ++j) {
+            if (with_backgrounds || !name.contains("/Common_Backgrounds")) {
+                biome_contents.add(new Sprite(null, name + "/" + files[j].getName(),
+                        0.5, 0.5, 0, thumb_size, thumb_size, 0, 1, "hoho", false));
+            }
+        }
+    }
+    
+    void DrawPick(int type, TreeMap<Integer, ArrayList<Sprite>> sprites,
+            boolean back, boolean mouse_action, double mx, double my) {
+        ArrayList<Sprite> sps = new ArrayList<>();
+        if (sprites.containsKey(room)) sps = sprites.get(room);
+        int picked = -1;
+        for (int i = 0; i < sps.size(); ++i) {
+            Sprite sprite = sps.get(i);
+            if (back != sprite.Contains("back")) continue;
+            sprite.StepAndDraw(projector_graphics);
+            double t = 0.6 * animator.total_time;
+            t -= Math.floor(t);
+            if (type != 6) {
+                if ((type != 0) && (t < 0.5) && (variable == sprite) && (variable_type != 6)) {
+                    sprite.DrawScale(projector_graphics,
+                            sprite.scale_x * sprite.image.getWidth() / (sprite.image.getWidth() + 10.),
+                            sprite.scale_y * sprite.image.getHeight() / (sprite.image.getHeight() + 10.));
+                }
+            } else {
+                if (sprite.next_sprite == sprite) sprite.next_sprite = null;
+                if (sprite.next_sprite != null) {
+                    boolean found = false;
+                    for (int r : sprites.keySet()) for (Sprite sp : sprites.get(r)) {
+                        if (sp == sprite.next_sprite) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) sprite.next_sprite = null;
+                }
+                Color color = null;
+                if (variable == sprite) color = Color.green;
+                if ((variable_entry != null) &&
+                        (variable_entry.next_sprite == sprite)) color = Color.green;
+                if (sprite.Contains("inactive")) color = Color.yellow;
+                if (sprite.next_sprite == null) color = Color.red;
+                if (((variable_entry != null) &&
+                        (variable_entry.next_sprite == sprite) && (t < 0.5))) color = null;
+                if (color != null) {
+                    double cs = Math.cos(sprite.angle);
+                    double sn = Math.sin(sprite.angle);
+                    double q = 0.5 * sprite.scale_x * sprite.image.getWidth();
+                    double dx = q * cs;
+                    double dy = -q * sn;
+                    projector_graphics.setColor(color);
+                    projector_graphics.setStroke(new BasicStroke(8));
+                    Sprite.DrawLine(sprite.x - dx, sprite.y - dy, sprite.x + dx,
+                                sprite.y + dy, projector_graphics);
+                    if (variable == sprite) {
+                        projector_graphics.setColor(Color.green);
+                        Sprite.DrawLine(sprite.x, sprite.y, sprite.x + glob.door_shift * sn,
+                                sprite.y + glob.door_shift * cs, projector_graphics);
+                    }
+                    projector_graphics.setStroke(new BasicStroke(1));
+                }
+            }
+            if (mouse_action && sprite.Collision(mx + Sprite.tran_x, my + Sprite.tran_y) != null) {
+                double dx = sprite.x - mx - Sprite.tran_x;
+                double dy = sprite.y - my - Sprite.tran_y;
+                double dist = dx * dx + dy * dy;
+                if ((dist < min_dist) || (variable_type == 0)) {
+                    min_dist = dist;
+                    picked = i;
+                }
+            }
+        }
+        if (picked >= 0) {
+            variable = sps.get(picked);
+            variable_type = type;
+            diffx = variable.x - mx - Sprite.tran_x;
+            diffy = variable.y - my - Sprite.tran_y;
+            sps.remove(picked);
+            sps.add(variable);
+        }
+    }
+    
+    void DrawSegment(double z, double c, double s, Graphics2D g) {
+        double ox = animator.width / 2 + grid.x;
+        double oy = animator.height / 2 + grid.y;
+        double[] a = new double[8];
+        int k = 0;
+        if (s != 0.) {
+            double v = (z + c * ox) / s + oy;
+            if (v > 0 && v <= animator.height) {
+                a[k] = 0;
+                a[k + 1] = v;
+                k += 2;
+            }
+            v = (z - c * (animator.width - ox)) / s + oy;
+            if (v > 0 && v <= animator.height) {
+                a[k] = animator.width;
+                a[k + 1] = v;
+                k += 2;
+            }
+        }
+        if (c != 0.) {
+            double u = (z + s * oy) / c + ox;
+            if (u >= 0 && u < animator.width) {
+                a[k] = u;
+                a[k + 1] = 0.;
+                k += 2;
+            }
+            u = (z - s * (animator.height - oy)) / c + ox;
+            if (u >= 0 && u < animator.width) {
+                a[k] = u;
+                a[k + 1] = animator.height;
+                k += 2;
+            }
+        }
+        if (k >= 4) {
+            g.drawLine((int)ProjectX(a[0], false), (int)ProjectY(a[1], false),
+                    (int)ProjectX(a[2], false), (int)ProjectY(a[3], false));
+        }
+    }
+    
+    void DrawGrid() {
+        Graphics2D g = animator.graphics;
+        g.setColor(Color.red);
+        g.setStroke(new BasicStroke(1));
+        g.fillOval((int)ProjectX(animator.width / 2 + grid.x - 4, false),
+                (int)ProjectY(animator.height / 2 + grid.y - 4, false), 8, 8);
+        double x0 = ProjectX(0, false);
+        double y0 = ProjectY(0, false);
+        double c = Math.cos(grid_angle);
+        double s = Math.sin(grid_angle);
+        for (int m = 2 * (animator.width % grid.width - animator.width);
+                m < 3 * animator.width; m += grid.width) {
+            DrawSegment(m, c, -s, g);
+        }
+        for (int n = 2 * (animator.height % grid.height - animator.height);
+                n < 3 * animator.height; n += grid.height) {
+            DrawSegment(n, s, c, g);
+        }
+    }
+    
+    void Snap(boolean xdir, boolean ydir) {
+        double xx = -variable.center_x * variable.scale_x;
+        double yy = (-variable.center_y + variable.image.getHeight()) * variable.scale_y;
+        double c = Math.cos(variable.angle - variable.center_angle);
+        double s = Math.sin(variable.angle - variable.center_angle);
+        double x = c * xx + s * yy + variable.x - animator.width / 2 - Sprite.tran_x - grid.x;
+        double y = -s * xx + c * yy + variable.y - animator.height / 2 - Sprite.tran_y - grid.y;
+        c = Math.cos(grid_angle);
+        s = Math.sin(grid_angle);
+        if (xdir) {
+            double h = (c * x - s * y) / grid.width;
+            h -= Math.floor(h + 0.5);
+            variable.x -= c * h * grid.width;
+            variable.y -= -s * h * grid.width;
+        }
+        if (ydir) {
+            double h = (s * x + c * y) / grid.height;
+            h -= Math.floor(h + 0.5);
+            variable.x -= s * h * grid.height;
+            variable.y -= c * h * grid.height;
+        }
+    }
+    
+    void DeSnap() {
+        if ((variable == null) || (variable_type == 0)) return;
+        double xx = -variable.center_x * variable.scale_x;
+        double yy = (-variable.center_y + variable.image.getHeight()) * variable.scale_y;
+        double c = Math.cos(variable.angle - variable.center_angle);
+        double s = Math.sin(variable.angle - variable.center_angle);
+        grid.x = (int)(c * xx + s * yy + variable.x - animator.width / 2 - Sprite.tran_x);
+        grid.y = (int)(-s * xx + c * yy + variable.y - animator.height / 2 - Sprite.tran_y);
+        grid.width = (int)(variable.image.getWidth() * Math.abs(variable.scale_x));
+        grid.height = (int)(variable.image.getHeight() * Math.abs(variable.scale_y));
+        grid_angle = variable.angle;
+    }
+    
+    int ButtonStrings(int index, ArrayList<String> dif_str, int font_size, int sx, int sy, Color base, Color selected, boolean scroll) {
+        Graphics2D g = animator.graphics;
+        Font tr = new Font("Helvetica", Font.BOLD, font_size);
+        g.setFont(tr);
+        FontMetrics fm = g.getFontMetrics();
+        int[] sd = new int[dif_str.size() + 1];
+        sd[0] = sx;
+        int sy0 = (int)(sy - 0.75 * fm.getHeight());
+        int sy1 = (int)(sy + 0.25 * fm.getHeight());
+        int touched = -1;
+        for (int i = scroll? horizontal_scroll : 0; i < dif_str.size(); ++i) {
+            g.setColor(base);
+            if (i == index) {
+                g.setColor(selected);
+            }
+            String str = " " + dif_str.get(i) + " ";
+            g.drawString(str, sd[i], sy);
+            sd[i + 1] = sd[i] + fm.stringWidth(str);
+            if (animator.mouse_point.x >= sd[i] &&
+                    animator.mouse_point.x < sd[i + 1] &&
+                    animator.mouse_point.y >= sy0 &&
+                    animator.mouse_point.y < sy1) {
+                touched = i;
+            }
+        }
+        if (scroll && animator.mouse_point.y >= sy0 && animator.mouse_point.y <= sy1) {
+            if (wheel > 0 && sd[sd.length - 1] > animator.width) {
+                horizontal_scroll += 1;
+            } else if (wheel < 0 && horizontal_scroll > 0) {
+                horizontal_scroll -= 1;
+            }
+        }
+        return touched;
+    }
+    
+    int ButtonSprites(int index, ArrayList<Sprite> a, int sx, int sy, Color selected, boolean scroll) {
+        Graphics2D g = animator.graphics;
+        int touched = -1;
+        int i0 = scroll? vertical_scroll : 0;
+        double sprite_y = sy;
+        for (int i = i0; i < a.size(); ++i) {
+            Sprite sprite = a.get(i);
+            sprite.center_x = 0.5 * sprite.image.getWidth();
+            sprite.center_y = 0.5 * sprite.image.getHeight();
+            sprite.x = sx;
+            sprite.y = sprite_y;
+            sprite_y += 1.2 * sprite.image.getHeight();
+            sprite.StepAndDraw();
+            if (i == index) {
+                g.setColor(selected);
+                for (int j = 3; j < 7; ++j) {
+                    g.drawRect((int)a.get(index).x - sprite.image.getWidth() / 2 - j,
+                            (int)a.get(index).y - sprite.image.getHeight() / 2 - j,
+                            sprite.image.getWidth() - 1 + 2 * j, 
+                            sprite.image.getHeight() - 1 + 2 * j);
+                }
+            }
+            if (animator.mouse_point.x > sprite.x - 50 && 
+                    animator.mouse_point.x < sprite.x + 50 &&
+                    animator.mouse_point.y > sprite.y - 50 &&
+                    animator.mouse_point.y < sprite.y + 50) {
+                touched = i;
+            }
+        }
+        Sprite sprite = a.get(a.size() - 1);
+        if (scroll && animator.mouse_point.x < sprite.x + 50 && animator.mouse_point.x > sprite.x - 50 && 
+                animator.mouse_point.y > sy) {
+            if (wheel > 0 && sprite.y + 50 > animator.height) {
+                vertical_scroll += 1;
+            } else if (wheel < 0 && vertical_scroll > 0) {
+                vertical_scroll -= 1;
+            }
+        }
+        return touched;
+    }
+
+    void Rectum(boolean mouseTyped) {
+        boolean multi_entered = animator.MultiEntered();
+        textRects.Start(mouseTyped);
+        int h = animator.height - (int)(2.2 * textRects.fm.getHeight());
+        String val = textRects.Act("room", 170, h, null, String.valueOf(room), null, null, null, null);
+        int nr = Integer.valueOf(val);
+        if ((nr > 0) && (nr != room) && !glob.backgrounds.keySet().contains(nr)) {
+            ChangeRoomNumber(room, nr);
+            room = nr;
+            return;
+        }
+        if ((variable != null) && (variable.next_sprite != null)) {
+            val = textRects.Act("next_room", variable.next_sprite.GetString("room"));
+            if (val.equals("-")) {
+                variable.next_sprite = null;
+                return;
+            }
+        }
+        double d = glob.suit.gravities.containsKey(room)? glob.suit.gravities.get(room) : 2.;
+        val = textRects.Act("gravity", String.valueOf(d));
+        glob.suit.gravities.put(room, Double.valueOf(val));
+        d = glob.suit.jumpities.containsKey(room)? glob.suit.jumpities.get(room) : 1.;
+        val = textRects.Act("jumpity", String.valueOf(d));
+        glob.suit.jumpities.put(room, Double.valueOf(val));
+        d = glob.suit.terminals.containsKey(room)? glob.suit.terminals.get(room) : 1.;
+        val = textRects.Act("terminal", String.valueOf(d));
+        glob.suit.terminals.put(room, Double.valueOf(val));
+        if ((variable != null) && (variable.GetInt("room") == room)) {
+            textRects.Newline();
+            variable.id = textRects.Act("id", variable.id);
+            if (variable_type == 4) {
+                variable.health = Double.valueOf(textRects.Act("health", String.valueOf(variable.health)));
+            }
+            Set<String> keys = variable.extras.keySet();
+            Set<String> nonkeys = new TreeSet<>();
+            nonkeys.add("room");
+            nonkeys.add("start_x");
+            nonkeys.add("start_y");
+            for (String key : keys) {
+                if (nonkeys.contains(key)) continue;
+                val = textRects.Act(key, String.valueOf(variable.extras.get(key)));
+                if (multi_entered && val.equals("-")) {
+                    variable.Remove(key);
+                    textRects.Clear();
+                    return;
+                } else {
+                    variable.PutString(key, val);
+                }
+            }
+            val = textRects.Act("+", "   ");
+            if (multi_entered && !val.isEmpty() && !keys.contains(val) &&
+                    (val.charAt(0) != ' ') &&
+                    (val.charAt(val.length() - 1) != ' ')) {
+                variable.PutString(val, " ");
+                textRects.Clear();
+                return; 
+            }
+        }
+    }
+    
+    void ChangeRoomNumber(int current_room, int new_room) {
+        RoomHelper(current_room, new_room, glob.backgrounds);
+        RoomHelper(current_room, new_room, glob.doors);
+        RoomHelper(current_room, new_room, glob.obstacles);
+        RoomHelper(current_room, new_room, glob.climbables);
+        RoomHelper(current_room, new_room, glob.items);
+        RoomHelper(current_room, new_room, glob.enemies);
+        RoomHelper(current_room, new_room, glob.foregrounds);
+    }
+    
+    void RoomHelper(int current_room, int new_room, TreeMap<Integer, ArrayList<Sprite>> sprites) {
+        if (!sprites.containsKey(current_room)) return;
+        if (new_room >= 0) {
+            for (Sprite sprite : sprites.get(current_room)) sprite.PutInt("room", new_room);
+            sprites.put(new_room, sprites.get(current_room));
+        }
+        sprites.remove(current_room);
+    }
+    
+}
