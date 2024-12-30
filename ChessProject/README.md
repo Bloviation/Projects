@@ -7,4 +7,4 @@ Setting up the board itself wasn’t particularly difficult, but making all the 
 This project required me not only to engage with a concept I was unfamiliar with but also to strengthen my foundational programming skills. 
 I had to manage numerous dynamic variables, each with its own unique properties, which pushed me to think critically and improve my overall approach to problem-solving.
 
-The files "Animator" and "Sprite" are support files written by my father to assist me.
+The "Animator" and "Sprite" files are support tools created by my father to assist me in this project.
