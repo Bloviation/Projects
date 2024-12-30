@@ -1,0 +1,845 @@
+import java.awt.AlphaComposite;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Frame;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
+import java.awt.Insets;
+import java.awt.MouseInfo;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.Robot;
+import java.awt.Toolkit;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
+import java.awt.event.MouseWheelEvent;
+import java.awt.event.MouseWheelListener;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Method;
+import java.nio.file.StandardCopyOption;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import javax.imageio.ImageIO;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JTextArea;
+import javax.swing.SwingUtilities;
+
+public class Animator {
+    public static Animator o;
+    public int width, height;
+    private boolean empty, shadow = false;
+    public BufferedImage image, shadow_image, prev_image, helper_image;
+    public Graphics2D graphics, shadow_graphics;
+    public JFrame frame;
+    public DrawPanel drawPanel;
+    public KL kl;
+    public ML ml;
+    public MWL mwl;
+    public MML mml;
+    public int cursorNum = 888;
+    private long milisecs, last_input_milisecs;
+    public double frame_time, total_time;
+    public int frame_counter = 0;
+    public Map<Integer, Integer> keys, mice;
+    public Set<Integer> nokeys;
+    public int notches, keyless;
+    public Point mouse_point, typed_point, center;
+    private int dx, dy;
+    public boolean pause, only_minipause, one_step;
+    public Object myclass;
+    public String[] modes;
+    private boolean animating = false;
+    public boolean fin = false;
+    public boolean mode_found = true;
+    public int mode;
+    public boolean decorated, retitle;
+    public boolean showmessage = true;
+    public boolean mouse3pop = true;
+    public Robot robot;
+    public boolean robotnic;
+    public String active;
+    public JTextArea textArea;
+    public String text;
+    public boolean text_enter = false, tab_enter = false, rtab_enter = false;
+    public boolean multi_entered = false;
+    int fadeNumber, fadeCounter;
+    double fadeFactor, fadeMult;
+    
+    public static final int ROBOT_WAIT = 100;
+    public static final double RATE_FACTOR = 0.03;
+     
+    public Animator(Object myclass_, int width_, int height_, String playlist_,
+            boolean decorated_) {
+        o = this;
+        myclass = myclass_;
+        playlist_ = playlist_.replace(" ", "");
+        empty = playlist_.isEmpty();
+        modes = playlist_.split(",");
+        mode = -1;
+        frame = new JFrame();
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        drawPanel = new DrawPanel();
+        CreateListen();
+        FrameListen();
+        frame.getContentPane().add(BorderLayout.CENTER, drawPanel);
+        decorated = decorated_;
+        frame.setUndecorated(!decorated);
+        if (decorated) {
+            Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+            width = screenSize.width;
+            height = screenSize.height;
+        } else {
+            GraphicsEnvironment.getLocalGraphicsEnvironment().
+                    getDefaultScreenDevice().setFullScreenWindow(frame);
+            width = frame.getWidth();
+            height = frame.getHeight();
+        }
+        if (width_ > 0 && width_ < width) width = width_;
+        if (height_ > 0 && height_ < height ) height = height_;
+        frame.setSize(width, height);
+        frame.setState(Frame.NORMAL);
+        frame.setResizable(false);
+        image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        graphics = image.createGraphics();
+        shadow_image =
+                new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        prev_image =
+                new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        helper_image =
+                new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        shadow_graphics = shadow_image.createGraphics();
+        keys = new TreeMap<>();
+        mice = new TreeMap<>();
+        keyless = 0;
+        SetKey(KeyEvent.VK_ENTER);
+        nokeys = new TreeSet<>();
+        drawPanel.setLayout(null);
+        SetCursor(-1);
+        frame.setVisible(true);
+        frame_time = 0.005;
+        Robotnic();
+    }
+    
+    public static void Exit(Exception ex) {
+        ex.printStackTrace();
+        System.exit(8);
+    }
+
+    public void Animate() {
+        if (!empty) frame.setVisible(true);
+        boolean mac = System.getProperty("os.name").contains("Mac");
+        if (mac) {
+            try { Runtime.getRuntime().exec("defaults write NSGlobalDomain " +
+                    "ApplePressAndHoldEnabled -bool false");
+            } catch (Exception ex) { Exit(ex); }
+        }
+        animating = true;
+        while (!fin) {
+            frame.repaint();
+            if (empty) break;
+        }
+        frame.dispose();
+        if (mac) {
+            try { Runtime.getRuntime().exec("defaults write NSGlobalDomain " +
+                    "ApplePressAndHoldEnabled -bool true");
+            } catch (Exception ex) { Exit(ex); }
+        }
+    }
+
+    public void AnimateStep() {
+        frame.repaint();
+        if (Typed(KeyEvent.VK_ESCAPE, true)) {
+            frame.dispose();
+        }
+    }
+    
+    public String GetName() {
+        return modes[mode];
+    }
+    
+    public void SetCursor(int cursor) {
+        if (cursor == cursorNum) return;
+        cursorNum = cursor;
+        if (cursor >= 0) {
+            frame.getContentPane().setCursor(new Cursor(cursor));
+        } else {
+            BufferedImage cursorImg = new BufferedImage(1, 1,
+                BufferedImage.TYPE_INT_ARGB);
+            Cursor blankCursor = Toolkit.getDefaultToolkit().createCustomCursor(
+                cursorImg, new Point(0, 0), "blank cursor");
+            frame.getContentPane().setCursor(blankCursor);
+        }
+    }
+    
+    public void Robotnic() {
+        if (robot == null) {
+            try { robot = new Robot();
+            } catch (Exception ex) { Exit(ex); }
+        }
+        robotnic = true;
+        MouseMove(0, 0);
+        try { Thread.sleep(2 * ROBOT_WAIT);
+        } catch (InterruptedException ex) {}
+        MouseMove(0, 0);
+        try { Thread.sleep(ROBOT_WAIT);
+        } catch (InterruptedException ex) {}
+        Point point = MouseInfo.getPointerInfo().getLocation();
+        int diff = Math.abs(point.x - dx) + Math.abs(point.y - dy);
+        MouseMove(width * 3 / 4, height * 3 / 4);
+        try { Thread.sleep(2 * ROBOT_WAIT);
+        } catch (InterruptedException ex) {}
+        MouseMove(width * 3 / 4, height * 3 / 4);
+        try { Thread.sleep(ROBOT_WAIT);
+        } catch (InterruptedException ex) {}
+        point = MouseInfo.getPointerInfo().getLocation();
+        diff += Math.abs(point.x - width * 3 / 4 - dx) +
+                Math.abs(point.y - height * 3 / 4 - dy);
+        robotnic =  diff < 0.1 * height;
+    }
+    
+    public boolean Call(String str) {
+        return Call(myclass, str);
+    }
+    
+    public boolean Call(Object mc, String str) {
+        Method method = null;
+        try { method = mc.getClass().getDeclaredMethod(str,
+                (Class<?>[])null);
+        } catch (NoSuchMethodException ex) {
+            return false;
+        } catch (SecurityException ex) { Exit(ex); }
+        method.setAccessible(true);
+        try { method.invoke(mc);
+        } catch (Exception ex) { Exit(ex); }
+        return true;
+    }
+
+    public void MouseMove(int i, int j) {
+        if (robot != null && robotnic) robot.mouseMove(i + dx, j + dy);
+    }
+
+    public void MouseCenter() {
+        MouseMove(center.x, center.y);
+    }
+    
+    public void RecomputeMousePoint() {
+        Point mouse_point_0 = MouseInfo.getPointerInfo().getLocation();
+        mouse_point = new Point(mouse_point_0.x - dx, mouse_point_0.y - dy);
+    }
+    
+    public boolean PrePressed(int key) {
+        int c = keys.getOrDefault(key, -1);
+        if (c < 0) return false;
+        keys.replace(key, c & 0xe);
+        return (c & 1) != 0;
+    }
+
+    public boolean Pressed(int key) {
+        int c = keys.getOrDefault(key, -1);
+        if (c < 0) return false;
+        return (c & 2) != 0;
+    }
+    
+    public boolean Typed(int key) {
+        return Typed(key, false);
+    }
+    
+    public boolean Typed(int key, boolean inside) {
+        if (inside && nokeys.contains(key)) return false;
+        int c = keys.getOrDefault(key, -1);
+        if (c < 0) return false;
+        keys.replace(key, c & 0xb);
+        return (c & 4) != 0;
+    }
+    
+    public boolean MousePrePressed(int button) {
+        int c = mice.getOrDefault(button, -1);
+        if (c < 0) return false;
+        mice.replace(button, c & 0xe);
+        return (c & 1) != 0;
+    }
+    
+    public boolean MousePressed(int button) {
+        int c = mice.getOrDefault(button, -1);
+        if (c < 0) return false;
+        return (c & 2) != 0;
+    }
+    
+    public boolean MouseTyped(int button) {
+        int c = mice.getOrDefault(button, -1);
+        if (c < 0) return false;
+        mice.replace(button, c & 0xb);
+        return (c & 4) != 0;
+    }
+    
+    public int WheeledReset() {
+        int n = notches;
+        notches = 0;
+        return n;
+    }
+    
+    public static void SetAlpha(Graphics2D g, double alpha) {
+        AlphaComposite alcom = AlphaComposite.getInstance(
+                    AlphaComposite.SRC_OVER, (float)alpha);
+        g.setComposite(alcom);
+    }
+    
+    public void SetFade(double fadeFactor_, int fadeNumber_) {
+        fadeFactor = fadeFactor_;
+        fadeNumber = fadeNumber_;
+        fadeMult = 1.;
+        fadeCounter = 0;
+    }
+    
+    public void Fade(Graphics2D g, BufferedImage fadeImage) {
+        if (fadeNumber <= 0) return;
+        ++fadeCounter;
+        if (fadeCounter > fadeNumber) {
+            fadeCounter = 0;
+            fadeMult = Math.min(fadeFactor * fadeMult, fadeNumber);
+        }
+        if ((fadeCounter % (int)fadeMult) != 0) return;
+        SetAlpha(g, fadeMult / fadeNumber);
+        g.drawImage(fadeImage, 0, 0, null);
+        SetAlpha(g, 1.);
+        if (fadeMult >= fadeNumber) fadeNumber = 0;
+    }
+    
+    public void Shadow() {
+        shadow = true;
+        shadow_graphics.drawImage(image, 0, 0, null);
+    }
+    
+    public static String CFN(String path) {
+        if (path == null) return null;
+        if (File.separatorChar=='\\') {
+            return path.replace('/', File.separatorChar);
+        } else {
+            return path.replace('\\', File.separatorChar);
+        }
+    }
+    
+    public void Jar2File(String injar_path, String file_path) {
+        int loc = file_path.lastIndexOf("/");
+        new File(file_path.substring(0, loc + 1)).mkdirs();
+        InputStream stream = this.getClass().getResourceAsStream(injar_path);
+        File file = new File(file_path);
+        try {
+            java.nio.file.Files.copy(stream, file.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception ex) {
+            System.out.println("Failed extracting " + injar_path);
+            ex.printStackTrace();
+            System.exit(8);
+        }
+        try {
+            stream.close();
+        } catch (Exception ex) {
+            System.out.println("Failed closing " + injar_path);
+            ex.printStackTrace();
+            System.exit(8);
+        }
+    }
+    
+    public BufferedImage ReadAndRescale(String path,
+            double i_scale_x, double i_scale_y, int i_mode) {
+        // i_mode = 0 - absolute, 1 - relative to image, 2 - relative to screen
+        BufferedImage img = null;
+        try {
+            img = ImageIO.read(new File(CFN("src/" + path)));
+        } catch (Exception ex) {}
+        if (img == null) {
+            try { img = ImageIO.read(new File(CFN(path)));
+            } catch (Exception ex) {}
+        }
+        if (img == null) {
+            Jar2File("/" + path, path);
+            try { img = ImageIO.read(new File(CFN(path)));
+            } catch (Exception ex) {}
+        }
+        if (img == null) {
+            System.out.println("Failed reading image " + path);
+            return null;
+        }
+        int imag_width, imag_height;
+        if (i_mode == 0) {
+            imag_width = (int) Math.abs(i_scale_x);
+            imag_height = (int) Math.abs(i_scale_y);
+        } else if (i_mode == 1) {
+            imag_width = (int) (Math.abs(i_scale_x) * img.getWidth());
+            imag_height = (int) (Math.abs(i_scale_y) * img.getHeight());
+        } else {
+            imag_width = (int) (Math.abs(i_scale_x) * width);
+            imag_height = (int) (Math.abs(i_scale_y) * height);
+        }
+        BufferedImage imag;
+        if ((imag_width == img.getWidth()) &&
+                (imag_height == img.getHeight()) &&
+                (i_scale_x > 0) && (i_scale_y > 0)) {
+            imag = img;
+        } else {
+            AffineTransform at = new AffineTransform();
+            at.scale(imag_width / (double)img.getWidth(),
+                    imag_height / (double)img.getHeight());
+            imag = new BufferedImage(imag_width, imag_height,
+                    BufferedImage.TYPE_INT_ARGB);
+            imag.createGraphics().drawImage(img, at, null);
+            if ((i_scale_x < 0) || (i_scale_y < 0))
+                imag = Flip(imag, i_scale_x < 0, i_scale_y < 0, false, false);
+        }
+        return imag;
+    }
+    
+    public static BufferedImage Flip(BufferedImage image, boolean flip_x,
+            boolean flip_y, boolean transpose, boolean inverse) {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        BufferedImage img;
+        if (!transpose) {
+            img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            for (int j = 0; j < h; ++j) {
+                int jj = flip_y? h - 1 - j : j;
+                for (int i = 0; i < w; ++i) {
+                    int ii = flip_x? w - 1 - i : i;
+                    img.setRGB(ii, jj, image.getRGB(i, j));
+                }
+            }
+        } else {
+            img = new BufferedImage(h, w, BufferedImage.TYPE_INT_ARGB);
+            if (inverse) {
+                boolean help = flip_x;
+                flip_x = flip_y;
+                flip_y = help;
+            }
+            for (int j = 0; j < h; ++j) {
+                int jj = flip_y? h - 1 - j : j;
+                for (int i = 0; i < w; ++i) {
+                    int ii = flip_x? w - 1 - i : i;
+                    img.setRGB(jj, ii, image.getRGB(i, j));
+                }
+            }
+        }
+        return img;
+    }
+    
+    public static BufferedImage Gemini(BufferedImage image) {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        BufferedImage img;
+        img = new BufferedImage(w, 2 * h, BufferedImage.TYPE_INT_ARGB);
+        for (int j = 0; j < h; ++j) {
+            for (int i = 0; i < w; ++i) {
+                int c = image.getRGB(i, j);
+                img.setRGB(i, h - 1 - j, c);
+                img.setRGB(i, h + j, c);
+            }
+        }
+        return img;
+    }
+    
+    public void Purify(String path, int col) {
+        BufferedImage img = ReadAndRescale(path, 1., 1., 2);
+        for (int j = 0; j < img.getHeight(); ++j) {
+            for (int i = 0; i < img.getWidth(); ++i) {
+                if (img.getRGB(i, j) != col) {
+                    img.setRGB(i, j, 0);
+                }
+            }
+        }
+        File outputfile = new File(path);
+        try { ImageIO.write(img, "png", outputfile);
+        } catch (IOException ex) {}
+    }
+    
+    public class DrawPanel extends JPanel {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public void paintComponent(Graphics g) {
+            if (!animating) return;
+            long ms = System.currentTimeMillis();
+            ++frame_counter;
+            Point mouse_point_0 = MouseInfo.getPointerInfo().getLocation();
+            mouse_point = (Point)mouse_point_0.clone();
+            SwingUtilities.convertPointFromScreen(mouse_point, this);
+            dx = mouse_point_0.x - mouse_point.x;
+            dy = mouse_point_0.y - mouse_point.y;
+            Insets insets = frame.getInsets();
+            center = new Point((width - insets.right + insets.left) / 2,
+                    (height - insets.top + insets.bottom) / 2);
+            one_step = false;
+            boolean pren = Typed(KeyEvent.VK_ENTER, true);
+            boolean prqu = Typed(KeyEvent.VK_QUOTE, true);
+            if (Typed(KeyEvent.VK_ESCAPE, true)) {
+                fin = true;
+            } else if (Typed(KeyEvent.VK_F2, true)) {
+                try {
+                    DateFormat dateFormat =
+                            new SimpleDateFormat("yyyy_MM_dd__HH_mm_ss");
+                    String fname = System.getProperty("user.home") +
+                            "/Downloads/screen_" +
+                            dateFormat.format(new Date());
+                    File f = new File(CFN(fname));
+                    ImageIO.write(image, "png", f);
+                    System.out.println("Screen saved at " + fname);
+                } catch(Exception ex) { Exit(ex); }
+            } else if (Typed(KeyEvent.VK_BACK_SPACE, true) || pren || prqu) {
+                if (pren)
+                    mode = (mode + 1) % modes.length;
+                if (prqu)
+                    mode = (mode + modes.length - 1) % modes.length;
+                pause = false;
+                keys.clear();
+                mice.clear();
+                boolean init_found = Call("Init_"  + modes[mode]);
+                if (!init_found) Call("Init_");
+                boolean background_found = Call("Background_" + modes[mode]);
+                if (!background_found) Call("Background_");
+                mode_found = init_found || background_found;
+                shadow = false;
+            } else if (Typed(KeyEvent.VK_B, true)) {
+                boolean background_found = Call("Background_" + modes[mode]);
+                if (!background_found) Call("Background_");
+            } else if (Typed(KeyEvent.VK_SHIFT, true)) {
+                one_step = true;
+                pause = !pause;
+            } else if (Typed(KeyEvent.VK_SPACE, true)) {
+                pause = !pause;
+            } else if (Typed(KeyEvent.VK_SLASH, true)) {
+                helper_image.createGraphics().drawImage(image, 0, 0, null);
+                graphics.drawImage(prev_image, 0, 0, null);
+                prev_image.createGraphics().drawImage(helper_image, 0, 0, null);
+                one_step = pause = true;
+            }
+            if (!pause || only_minipause) {
+                if (one_step)
+                    prev_image.createGraphics().drawImage(image, 0, 0, null);
+                if (retitle) frame.setTitle(modes[mode]);
+                boolean foreground_found = Call("Foreground_" + modes[mode]);
+                if (!foreground_found) Call("Foreground_");
+                mode_found |= foreground_found;
+                if (!mode_found) {
+                    System.out.println("mode " + modes[mode] + " not found");
+                    System.exit(1);
+                }
+                if (frame.isActive()) {
+                    if ((milisecs > 0) && (frame_counter > 2)) {
+                        double dt = 0.001 * (ms - milisecs);
+                        frame_time = Math.max(Math.min(dt, 1.5 * frame_time),
+                                0.7 * frame_time);
+                        if (!pause && frame.isActive())
+                            total_time += frame_time;
+                    }
+                }
+            } else {
+                if (ms > last_input_milisecs + 2000) {
+                    try { Thread.sleep(500);
+                    } catch (InterruptedException ex) {}
+                }
+            }
+            if (one_step) pause = true;
+            boolean mouse3 = MouseTyped(3);
+            g.drawImage(image, 0, 0, null);
+            if (shadow) {
+                shadow = false;
+                graphics.drawImage(shadow_image, 0, 0, null);
+            }
+            if (retitle && !decorated) {
+                Font oldFont = g.getFont();
+                g.setFont(new Font("Dialog", Font.BOLD, 14));
+                String str = modes[mode];
+                int w = g.getFontMetrics().stringWidth(str);
+                int h = g.getFontMetrics().getHeight();
+                g.setColor(new Color(196, 196, 196, 128));
+                g.fillRect((width - w - h / 2) / 2, 0, w + h / 2, h);
+                g.setColor(Color.black);
+                g.drawString(str, (width - w) / 2, h * 3 / 4);
+                g.setFont(oldFont);
+            }
+            if (textArea != null) text = textArea.getText();
+            milisecs = ms;
+            if (keyless > 0) --keyless;
+        }
+
+    }
+    
+    public void SetKey(int key) {
+        keys.put(key, 7);
+    }
+    
+    public class KL implements KeyListener {
+
+        @Override
+        public void keyTyped(KeyEvent e) {}
+        
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (keyless > 0) return;
+            int key = e.getExtendedKeyCode();
+            keys.put(key, 3);
+            last_input_milisecs = System.currentTimeMillis();
+        }
+        
+        @Override
+        public void keyReleased(KeyEvent e) {
+            if (keyless > 0) return;
+            int key = e.getExtendedKeyCode();
+            keys.put(key, 4);
+            last_input_milisecs = System.currentTimeMillis();
+        }
+        
+    }
+    
+    public class ML implements MouseListener {
+
+        @Override
+        public void mouseClicked(MouseEvent e) {}
+        
+        @Override
+        public void mousePressed(MouseEvent e) {
+            typed_point = mouse_point;
+            int mi = e.getButton();
+            mice.put(mi, 3);
+            last_input_milisecs = System.currentTimeMillis();
+        }
+        
+        @Override
+        public void mouseReleased(MouseEvent e) {
+            int mi = e.getButton();
+            mice.put(mi, 4);
+            last_input_milisecs = System.currentTimeMillis();
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent e) {}
+
+        @Override
+        public void mouseExited(MouseEvent e) {}
+        
+    }
+
+    public class MWL implements MouseWheelListener {
+
+        @Override
+        public void mouseWheelMoved(MouseWheelEvent e) {
+            last_input_milisecs = System.currentTimeMillis();
+            notches = e.getWheelRotation();
+        }
+        
+    }
+    
+    public class MML implements MouseMotionListener {
+
+        @Override
+        public void mouseDragged(MouseEvent e) {}
+
+        @Override
+        public void mouseMoved(MouseEvent e) {}
+        
+    }
+    
+    void CreateListen() {
+        kl = new KL();
+        ml = new ML();
+        mwl = new MWL();
+        mml = new MML();
+    }
+    
+    void FrameListen() {
+        frame.addKeyListener(kl);
+        drawPanel.addMouseListener(ml);
+        drawPanel.addMouseWheelListener(mwl);
+        drawPanel.addMouseMotionListener(mml);
+        frame.requestFocus();           
+    }
+    
+    public class TextRects {
+    	public Font font;
+        public FontMetrics fm;
+        public String qtitle;
+        public int id, ind, qid, qind;
+        public int count, pcount, rcount;
+        public int x, y, px, rx, ry, rw, rh;
+        public Rectangle rect;
+        public Color color;
+        public boolean mouse_typed, inside_typed;
+        public boolean next;
+        
+        public TextRects(Font font_) {
+            font = font_;
+            graphics.setFont(font);
+            fm = graphics.getFontMetrics();
+            rw = rh = fm.getHeight();
+            color = Color.black;
+            Clear();
+        }
+        
+        public void Start(boolean mouse_typed_) {
+            mouse_typed = mouse_typed_;
+            id = 0;
+            ind = -1;
+            count = -1;
+            inside_typed = false;
+        }
+        
+        public void Clear() {
+            Start(false);
+            qtitle = null;
+            qid = qind = -1;
+            pcount = rcount = -1;
+        }
+        
+        public void Newline() {
+            ++id;
+            ind = -1;
+        }
+    	
+    	public String Act(String title_, Integer x_, Integer y_, Color color_,
+                String value_,
+                Integer rx_, Integer ry_, Integer rw_, Integer rh_) {
+            ++ind;
+            if (x_ == null) x_ = ind == 0 ? px : rx + rw + fm.getHeight() / 2;
+            if (y_ == null) y_ = ind == 0 ? y + (int)(1.1 * rh) : y;
+            if (color_ == null) color_ = color;
+            if (rx_ == null) rx_ = x_ + fm.stringWidth(title_ + " ");
+            if (ry_ == null) ry_ = y_;
+            if (rw_ == null) rw_ = fm.stringWidth(value_ + "  ");
+            if (rh_ == null) rh_ = rh;
+            x = x_;
+            y = y_;
+            color = color_;
+            rx = rx_;
+            ry = ry_;
+            rw = rw_;
+            rh = rh_;
+            if (ind == 0) px = x_;
+            rect = new Rectangle(rx, ry, rw, rh);
+            int h = fm.getHeight();
+            graphics.setColor(color);
+            graphics.drawString(title_, x, y + rh / 2 + h / 4);
+            String value = value_;
+            if (value == null) return value;
+            ++count;
+            if (id == 0 && ind == 0) count = 0;
+            if ((id == qid) && (ind == qind)) {
+            	if (tab_enter) next = true;
+            	if (rtab_enter) rcount = pcount;
+                if (text_enter || tab_enter || rtab_enter ||
+                        (mouse_typed && !inside_typed)) {
+                    if (!title_.equals(qtitle)) {
+                        System.out.println(
+                                "TextRects error: " + title_ + "!=" + qtitle);
+                        System.exit(39);
+                    }
+                    text_enter = tab_enter = rtab_enter = false;
+                    qid = qind = -1;
+                    qtitle = null;
+                    CancelTextArea();
+                }
+                value = text;
+            } else if ((mouse_typed && rect.contains(mouse_point)) ||
+                    next || (count == rcount)) {
+            	next = false;
+            	rcount = -1;
+                qtitle = title_;
+                qid = id;
+                qind = ind;
+                SetTextArea(rect, value, font);
+                inside_typed = true;
+            }
+            pcount = count;
+            graphics.setColor(Color.white);
+            graphics.fillRect(rx, ry, rw, rh);
+            graphics.setColor(Color.black);
+            graphics.drawString(value, rx + h / 6, ry + rh / 2 + h / 4);
+            return value;
+    	}
+        
+        public String Act(String title_, String value_) {
+            return Act(title_, null, null, null, value_,
+                    null, null, null, null);
+        }
+        
+    }
+    
+    public void SetTextArea(Rectangle bounds, String str, Font font) {
+        text = str;
+        text_enter = tab_enter = rtab_enter = false;
+        textArea = new JTextArea(str);
+        textArea.setBackground(Color.white);
+        textArea.setBounds(bounds);
+        if (font != null) textArea.setFont(font);
+        drawPanel.add(textArea);
+        textArea.addKeyListener(new KeyAdapter(){
+            @Override
+            public void keyTyped(KeyEvent evt){
+                char c = evt.getKeyChar();
+                text_enter = c == KeyEvent.VK_ENTER;
+                tab_enter = (c == KeyEvent.VK_TAB) &&
+                        (evt.getModifiersEx() <= 0);
+                rtab_enter = (c == KeyEvent.VK_TAB) &&
+                        (evt.getModifiersEx() > 0);
+                if (text_enter || tab_enter || rtab_enter) CancelTextArea();
+            }
+        });
+        textArea.requestFocus();
+        textArea.selectAll();
+    }
+    
+    public void CancelTextArea() {
+        if (textArea == null) return;
+        keyless = 7;
+        textArea.removeAll();
+        textArea = null;
+        drawPanel.removeAll();
+        FrameListen();
+        multi_entered = true;
+    }
+    
+    public boolean MultiEntered() {
+        boolean h = multi_entered;
+        multi_entered = false;
+        return h;
+    }
+    
+    public static double Angle(double x, double y) {
+        double a = 0.;
+        if (Math.abs(x) > Math.abs(y)) {
+            a = Math.atan(y / x);
+            if (x < 0.) a += Math.PI;
+        } else if (y != 0) {
+            a = 0.5 * Math.PI - Math.atan(x / y);
+            if (y < 0) a -= Math.PI;
+        }
+        return a;
+    }
+
+    public static boolean isAsciiP(String str) {
+        if (str == null) return false;
+        for (int i = 0; i < str.length(); i++) {
+            char ch = str.charAt(i);
+            if (ch < 32 || ch >= 127) return false;
+        }
+        return true;
+    }
+
+}
