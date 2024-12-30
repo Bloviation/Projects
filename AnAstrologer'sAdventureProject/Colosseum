@@ -1,0 +1,465 @@
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
+
+public class Colosseum {
+    
+    static Animator animator;
+    static Glob glob;
+    static Sprite crab_shell;
+    
+    Colosseum() {
+        animator = Animator.o;
+        glob = Glob.o;
+        crab_shell = new Sprite(null, "../zodiac/Extras/crab_shell.png", 0.5, 0.5, 0, 0.75, 0.65, 1,  1, "crab_shell");
+        crab_shell.image = crab_shell.dimage = Animator.SemiTransparent(crab_shell.image, 128);
+        crab_shell.SetSmoothing(5, 5, 0);
+        crab_shell.health = 0;
+    }
+    
+    void Move_leopard(Sprite sprite) {
+        if (!sprite.Contains("pounce")) sprite.PutInt("pounce", 0);
+        if (!sprite.Contains("starting_y")) sprite.PutDouble("starting_y", sprite.y);
+        if (!sprite.Contains("pounce_timer")) sprite.PutDouble("pounce_timer", 1);
+        if (!sprite.Contains("second_strike")) sprite.PutDouble("second_strike", 0);
+        if (!sprite.Contains("second_strike_confirm")) sprite.PutInt("second_strike_confirm", 0);
+        if (!sprite.Contains("jump_back")) sprite.PutInt("jump_back", 0);
+        if (!sprite.Contains("attacked")) sprite.PutInt("attacked", 0);
+        if (!sprite.Contains("move_back")) sprite.PutInt("move_back", 0);
+        sprite.dist_flip = (sprite.y >= sprite.GetDouble("starting_y") - 5)? -2 : 0;
+        if (sprite.GetDouble("pounce") != 0) {
+            sprite.dist_flip = 0;
+            if (sprite.Collision(glob.astronomer) == null && sprite.Collision(crab_shell) == null && sprite.GetInt("jump_back") == 0) {
+                if (sprite.vy == 0) sprite.vy = -190;
+                sprite.vy += 100 * glob.gravity * glob.enemy_time;
+                if (sprite.GetInt("pounce") == -1) {
+                    sprite.x -= 400 * glob.enemy_time;
+                } else {
+                    sprite.x += 400 * glob.enemy_time;
+                }
+                sprite.y += sprite.vy * glob.enemy_time;
+                sprite.y = Math.min(sprite.GetDouble("starting_y"), sprite.y);
+                if (sprite.y == sprite.GetDouble("starting_y")) {
+                    sprite.PutInt("pounce", 0);
+                    sprite.PutInt("second_strike_confirm", 0);
+                    sprite.vy = 0;
+                }
+            } else if (glob.FindSprites("claw", glob.foregrounds).isEmpty() && sprite.GetInt("jump_back") != 0) {
+                if (sprite.vy == 0) sprite.vy = -60;
+                sprite.vy += 100 * glob.gravity * glob.enemy_time;
+                if (sprite.GetInt("jump_back") == -1) {
+                    sprite.x -= 500 * glob.enemy_time;
+                } else {
+                    sprite.x += 500 * glob.enemy_time;
+                }
+                if (sprite.vy > 0) sprite.dist_flip = -2;
+                sprite.y += sprite.vy * glob.enemy_time;
+                sprite.y = Math.min(sprite.GetDouble("starting_y"), sprite.y);
+                if (sprite.y == sprite.GetDouble("starting_y")) {
+                    sprite.PutInt("pounce", 0);
+                    sprite.PutInt("second_strike_confirm", 0);
+                    sprite.PutInt("jump_back", 0);
+                    sprite.vy = 0;
+                }
+            } else if (glob.FindSprites("claw", glob.foregrounds).isEmpty() && sprite.GetDouble("second_strike") == 0 && 
+                    sprite.GetInt("second_strike_confirm") <= 1) {
+                Sprite claw = new Sprite(null, "../zodiac/Colosseum_Foregrounds\\claw.png", 0.5, 0.5, 0, 0.15, 0.15, 1,  1, "claw");
+                Add_claw(sprite, claw, 1, 1);
+                if (sprite.GetInt("second_strike_confirm") == 1) {
+                    claw.PutString("jump_back_strike", "");
+                    sprite.PutInt("jump_back", (sprite.x < glob.astronomer.x)? -1 : 1);
+                    claw.PutDouble("damage", 0.5);
+                }
+                if (sprite.Collision(crab_shell) == null) {
+                    glob.astronomer.health -= claw.GetDouble("damage");
+                    sprite.vy = 0;
+                } else {
+                    crab_shell.health -= claw.GetDouble("damage");
+                    ZodiacDraw.constellations.get("Cancer").partial = Math.max(0, crab_shell.health / 2);
+                }
+                sprite.PutDouble("second_strike", 1.5);
+                sprite.AddInt("second_strike_confirm", 1);
+            }
+            sprite.PutDouble("pounce_timer", 1);
+        } else if (sprite.Contains("emergency_pounce")) {
+            sprite.dist_flip = 0;
+            sprite.vy += 100 * glob.gravity * glob.enemy_time;
+            sprite.x += sprite.vx * glob.enemy_time;
+            sprite.y += sprite.vy * glob.enemy_time;
+            if ((sprite.Collision(crab_shell) != null || sprite.Collision(glob.astronomer) != null) && sprite.GetInt("attacked") == 0) {
+                Sprite claw = new Sprite(null, "../zodiac/Colosseum_Foregrounds\\claw.png", 0.5, 0.5, 0, 0.15, 0.15, 1,  1, "claw");
+                Add_claw(sprite, claw, 1, 1);
+                if (sprite.Collision(crab_shell) == null) {
+                    glob.astronomer.health -= claw.GetDouble("damage");
+                } else {
+                    sprite.vy -= 120;
+                    crab_shell.health -= claw.GetDouble("damage");
+                    ZodiacDraw.constellations.get("Cancer").partial = Math.max(0, crab_shell.health / 2);
+                }
+                sprite.PutInt("attacked", 1);
+            }
+            if (sprite.y >= sprite.GetDouble("starting_y")) {
+                sprite.Remove("emergency_pounce");
+                sprite.vy = 0;
+                sprite.PutInt("attacked", 0);
+                glob.astronomer.PutInt("paralyzed", 0);
+            }
+            sprite.PutDouble("pounce_timer", 1);
+        } else if (Math.abs(sprite.x - glob.astronomer.x) < animator.width * 0.4) {
+            sprite.AddDouble("pounce_timer", -glob.enemy_time);
+            if ((sprite.x - glob.astronomer.x) * sprite.scale_x > 0) sprite.scale_x *= -1;
+            if (sprite.GetDouble("pounce_timer") < 0) {
+                sprite.PutDouble("pounce_timer", 1);
+                sprite.PutInt("pounce", (sprite.x > glob.astronomer.x)? -1 : 1);
+            }
+        }
+        if (sprite.GetInt("pounce") == 0 && !sprite.Contains("emergency_pounce")) {
+            if (Math.abs(sprite.x - glob.astronomer.x) > animator.width * 0.4) {
+                if (sprite.x > glob.astronomer.x) {
+                    sprite.x -= 100 * glob.enemy_time;
+                } else {
+                    sprite.x += 100 * glob.enemy_time;
+                }
+                sprite.PutDouble("pounce_timer", 1);
+            } else if (Math.abs(sprite.x - glob.astronomer.x) < animator.width * 0.3) {
+                sprite.dist_flip = 0;
+                if (sprite.x > glob.astronomer.x) {
+                    sprite.x += 200 * glob.enemy_time;
+                } else {
+                    sprite.x -= 200 * glob.enemy_time;
+                }
+                if (sprite.x > animator.width || sprite.x < 0) {
+                    sprite.PutInt("emergency_pounce", (sprite.x > glob.astronomer.x)? -1 : 1);
+                    if ((sprite.x - glob.astronomer.x) * sprite.scale_x > 0) sprite.scale_x *= -1;
+                    sprite.vx = 375 * ((sprite.x > glob.astronomer.x)? -1 : 1);
+                    sprite.vy = -240;
+                }
+                sprite.PutDouble("pounce_timer", 1);
+            }
+        }
+        if (glob.HitChecker(sprite, 0.1, true)) {
+            animator.Sound("../zodiac/Sounds\\Leopard_Snarl.wav", 5, 1., 1, "pain", 4, 1.);
+            sprite.PutInt("emergency_pounce", (sprite.x > glob.astronomer.x)? -1 : 1);
+            sprite.vx = 375 * ((sprite.x > glob.astronomer.x)? -1 : 1);
+            sprite.vy = -240;
+        }
+        if (sprite.x > animator.width / 2) {
+            sprite.x = Math.min(animator.width, sprite.x);
+        } else {
+            sprite.x = Math.max(0, sprite.x);
+        }
+        if (sprite.y > sprite.GetDouble("starting_y")) {
+            sprite.y = sprite.GetDouble("starting_y");
+        }
+        sprite.PutDouble("second_strike", Math.max(0, sprite.GetDouble("second_strike") - glob.enemy_time));
+    }
+    
+    void Add_claw(Sprite sprite, Sprite claw, double damage, double life) {
+        claw.PutDouble("damage", damage);
+        claw.PutInt("room", glob.room);
+        Point2D point = sprite.Collision(glob.astronomer);
+        if (sprite.Collision(crab_shell) != null) {
+            point = sprite.Collision(crab_shell);
+            if (sprite.GetInt("pounce") != 0) {
+                sprite.SetFather(crab_shell, 0., 0., 0., 999.);
+                sprite.LocateFather(sprite.x, sprite.y);
+            }
+        }
+        claw.x = point.getX();
+        claw.y = point.getY();
+        claw.PutDouble("claw_life", life);
+        claw.PutString("temp", "");
+        glob.AddGeneral(claw, glob.foregrounds);
+        if (sprite.Collision(crab_shell) == null) glob.astronomer.PutInt("paralyzed", 1);
+    }
+    
+    void Move_claw(Sprite sprite) {
+        sprite.AddDouble("claw_life", -glob.enemy_time);
+        if (sprite.GetDouble("claw_life") < 0) {
+            for (int i = glob.foregrounds.get(glob.room).size() - 1; i >= 0; --i) {
+                if (glob.foregrounds.get(glob.room).get(i).id.equals("claw")) {
+                    if (glob.foregrounds.get(glob.room).get(i).Contains("jump_back_strike")) {
+                        glob.astronomer.PutInt("paralyzed", 0);
+                        for (Sprite son : glob.FindSprites("leopard", glob.enemies)) son.father = null;
+                    }
+                    glob.foregrounds.get(glob.room).remove(i);
+                }
+            }
+        }
+    }
+    
+    void Move_Bull(Sprite sprite) {
+        if (sprite.image == null) return;
+        if (glob.FindSprites("bull_horn_hitbox", glob.foregrounds).isEmpty()) {
+            BufferedImage image = new BufferedImage((int)(sprite.image.getWidth() * 0.14 * Math.abs(sprite.scale_x)),
+                    (int)(sprite.image.getHeight() * Math.abs(sprite.scale_y)), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = image.createGraphics();
+            g.setColor(Color.RED);
+            g.fillRect(0, 35, image.getWidth(), image.getHeight());
+            Sprite rect1 = new Sprite(image, "", 0.5, 0.5, 0, 0.666666, 0.666666, 1,  1, "bull_horn_hitbox");
+            rect1.SetFather(sprite, 0.93, 0.5, 0, 999999);
+            rect1.PutInt("room", glob.room);
+            rect1.PutString("nodraw", "");
+            rect1.PutString("temp", "");
+            glob.AddGeneral(rect1, glob.enemies);
+        }
+        Sprite rect1 = glob.FindSprites("bull_horn_hitbox", glob.enemies).get(0);
+        sprite.dist_flip = -20;
+        sprite.SetSmoothing(5, 5, 0);
+        Sprite rope = glob.FindSprites("rope", glob.climbables).get(0);
+        Sprite rope2 = glob.FindSprites("rope2", glob.climbables).get(0);
+        Sprite rope3 = glob.FindSprites("rope3", glob.climbables).get(0);
+        Sprite flag = glob.FindSprites("flag", glob.foregrounds).get(0);
+        Sprite flag2 = glob.FindSprites("flag2", glob.foregrounds).get(0);
+        if (!rope2.Contains("chosen") && !rope3.Contains("chosen")) {
+            if (Math.random() <= 0.5) {
+                rope3.PutString("chosen", "");
+            } else  {
+                rope2.PutString("chosen", "");
+            }
+        }
+        if (!sprite.Contains("time")) glob.EnemyLiftAstronomer(sprite, 0.15, 1., 0., 0.);
+        double dx = sprite.x - glob.astronomer.x;
+        double dy = sprite.y - glob.astronomer.y;
+        double d = Math.sqrt(dx * dx + dy * dy);
+        if (d < animator.width * 0.35 && !sprite.Contains("time") && !sprite.Contains("cooldown")) {
+            sprite.PutDouble("time", 0);
+        } else if (sprite.Contains("time")) {
+            if (sprite.vx == 0) {
+                if (sprite.Contains("mega_charge")) {
+                    if (rope2.Contains("chosen")) {
+                        sprite.vx = sprite.x > flag.x? -500 : 500;
+                    } else {
+                        sprite.vx = sprite.x > flag2.x? -500 : 500;
+                    }
+                } else {
+                    sprite.vx = sprite.x > glob.astronomer.x? -350 : 350;
+                }
+            }
+            if (sprite.GetDouble("time") > 1) sprite.x += sprite.vx * glob.enemy_time;
+            sprite.AddDouble("time", glob.enemy_time);
+        } else if (sprite.x > glob.astronomer.x && (!sprite.Contains("cooldown") || sprite.GetDouble("cooldown") < 4)) {
+            sprite.x -= 150 * glob.enemy_time;
+        } else if (!sprite.Contains("cooldown") || sprite.GetDouble("cooldown") < 4) {
+            sprite.x += 150 * glob.enemy_time;
+        }
+        if (sprite.Contains("mega_charge") && (sprite.Collision(flag) != null || sprite.Collision(flag2) != null)) rope.PutString("reset", "");
+        if (sprite.Contains("time") && glob.invins_frames == 0 && sprite.Collision(glob.astronomer) != null) {
+            glob.astronomer.health -= 2;
+            glob.invins_frames = 1.5;
+        } else if (glob.invins_frames == 0 && sprite.Contains("py") && sprite.GetDouble("py") < 10 + Glob.o.astronomer.y) {
+            glob.astronomer.health -= 1;
+            glob.invins_frames = 1.5;
+            glob.astronomer.father = null;
+        }
+        if (sprite.Contains("time") && (glob.astronomer.father == null) && 
+                glob.astronomer.Collision(rect1) != null) {
+            glob.astronomer.SetFather(sprite, 1, 0.5, 0, 9999);
+        }
+        if (!rope.Contains("started")) {
+            rope.y -= 135;
+            rope2.y -= 55 + flag.image.getWidth() * flag.scale_x;
+            rope3.y -= 55 + flag2.image.getWidth() * flag2.scale_x;
+            flag.SetFather(rope2, 1.05, 1., 0, 9999);
+            flag2.SetFather(rope3, 1.05, 1., 0, 9999);
+            rope.PutDouble("started", rope.y);
+            rope2.PutDouble("started", rope2.y);
+            rope3.PutDouble("started", rope3.y);
+            rope.PutDouble("delay", 0);
+        }
+        double change = rope.y;
+        if (!rope.Contains("reset")) {
+            if (sprite.Contains("py") && sprite.GetDouble("py") > 10 + Glob.o.astronomer.y) {
+                rope.y = Math.min(animator.height * 0.32, rope.y + 400 * glob.enemy_time);
+                rope.PutDouble("delay", 0.3);
+            } else if (rope.GetDouble("delay") > 0) {
+                rope.y = Math.min(animator.height * 0.32, rope.y + 400 * glob.enemy_time);
+                rope.AddDouble("delay", -glob.enemy_time);
+            } else {
+                rope.AddDouble("delay", -glob.enemy_time);
+                if (rope.GetDouble("delay") < -0.45) {
+                    if (!rope.Contains("col") && glob.astronomer.Collision(rope) != null) rope.PutString("col", "");
+                    if (glob.astronomer.Collision(rope) != null || (glob.astronomer.y < animator.height / 2 && rope.Contains("col"))) {
+                        rope.y = Math.max(rope.GetDouble("started") + flag.image.getWidth() * flag.scale_x + 110, rope.y - 400 * glob.enemy_time);
+                        change -= rope.y;
+                        glob.astronomer.y -= change;
+                        if (rope2.Contains("chosen")) {
+                            rope2.y = Math.min(animator.height * 0.16, rope2.y + 800 * glob.enemy_time);
+                        } else {
+                            rope3.y = Math.min(animator.height * 0.16, rope3.y + 800 * glob.enemy_time);
+                        }
+                    } else {
+                        rope.y = Math.max(rope.GetDouble("started"), rope.y - 400 * glob.enemy_time);
+                        rope2.y = Math.max(rope2.GetDouble("started"), rope2.y - 800 * glob.enemy_time);
+                        rope3.y = Math.max(rope3.GetDouble("started"), rope3.y - 800 * glob.enemy_time);
+                    }
+                    if (glob.astronomer.y > animator.height / 2) rope.Remove("col");
+                }
+            }
+        }
+        if ((rope2.y >= animator.height * 0.16 || rope3.y >= animator.height * 0.16) && !sprite.Contains("mega_charge")) {
+            sprite.PutDouble("time", -1);
+            sprite.vx = 0;
+            sprite.PutDouble("mega_charge", 0);
+        }
+        if (sprite.Contains("mega_charge")) {
+            for (Sprite bull_spike : glob.FindSprites("bull_spike", glob.obstacles)) {
+                if (sprite.Contains("mega_charge") && sprite.Collision(bull_spike) != null) {
+                    sprite.health -= 5000;
+                    if (sprite.health <= 0.) rect1.health = 0.;
+                    sprite.Remove("mega_charge");
+                    if (rope2.Contains("chosen")) {
+                        rope2.Remove("chosen");
+                    } else {
+                        rope3.Remove("chosen");
+                    }
+                    break;
+                }
+            }
+        }
+        double x = sprite.x + sprite.scale_x * Math.signum(sprite.scale_y) * sprite.image.getWidth() / 2;
+        if (sprite.Contains("time") && 
+                ((sprite.Contains("mega_charge") && (x < -50 || x > animator.width + 50)) || 
+                (!sprite.Contains("mega_charge") && (x < 150 || x > animator.width - 150)))) {
+            sprite.Remove("time");
+            sprite.PutDouble("cooldown", 8);
+            sprite.vx = 0;
+        }
+        if (sprite.Contains("cooldown")) {
+            sprite.AddDouble("cooldown", -animator.frame_time);
+            if (sprite.GetDouble("cooldown") < 0) sprite.Remove("cooldown");
+        }
+        for (Sprite door : glob.GetSprites(glob.doors)) if (!door.Contains("inactive")) door.PutString("inactive", "");
+        if (glob.HitChecker(sprite, 1000, false)) {
+            animator.Sound("../zodiac/Sounds\\bull_pain.wav", -20, 1., 1, "pain", 1, 1.);
+        }
+    }
+    
+    void Move_saddle(Sprite sprite) {
+        Sprite bull = glob.FindSprites("Bull", glob.enemies).get(0);
+        if (sprite.father == null) sprite.SetFather(bull, 0.45, 0.2, 0, 9999);
+        sprite.angle = Math.abs(sprite.angle) * Math.signum(bull.angle);
+        sprite.scale_x = Math.abs(sprite.scale_x) * Math.signum(bull.scale_x);
+        sprite.scale_y = Math.abs(sprite.scale_y) * Math.signum(bull.scale_y);
+    }
+    
+    void Move_Cancer(Sprite sprite) {
+        glob.PickCons(sprite);
+    }
+    
+    void CrabShell() {
+        if (ZodiacDraw.constellations.get("Cancer").partial == 1) crab_shell.health = 2;
+        if (crab_shell.health > 0) {
+            crab_shell.x = glob.astronomer.x;
+            crab_shell.y = glob.astronomer.y - glob.astronomer.image.getHeight() * 0.8;
+        } else {
+            for (Sprite enemy : glob.GetSprites(glob.enemies)) {
+                if (enemy.father == crab_shell) enemy.father = null;
+            }
+            crab_shell.x = 10000;
+        }
+        if (crab_shell.x < 5000) crab_shell.StepAndDraw();
+    }
+    
+    void Room_600() {
+        CrabShell();
+        if (crab_shell.health <= 0 && crab_shell.x != 10000) {
+            for (Sprite sprite : glob.GetSprites(glob.enemies)) {
+                if (sprite.father == crab_shell) sprite.father = null;
+                if (sprite.id.equals("leopard")) sprite.PutDouble("second_strike", 0);
+            }
+            for (Sprite sprite : glob.GetSprites(glob.foregrounds)) if (sprite.id.equals("claw")) sprite.health = 0;
+        }
+        if (glob.GetSprites(glob.enemies).isEmpty()) for (Sprite door : glob.GetSprites(glob.doors)) door.Remove("inactive");
+    }
+    
+    void Room_601() {
+        Sprite rope = glob.FindSprites("rope", glob.climbables).get(0);
+        Sprite rope2 = glob.FindSprites("rope2", glob.climbables).get(0);
+        Sprite rope3 = glob.FindSprites("rope3", glob.climbables).get(0);
+        double change = rope.y;
+        double change2 = rope2.y;
+        double change3 = rope3.y;
+        if (rope.Contains("reset")) {
+            rope.y = Math.max(rope.GetDouble("started"), rope.y - 400 * glob.enemy_time);
+            change -= rope.y;
+            rope2.y = Math.max(rope2.GetDouble("started"), rope2.y - 1200 * glob.enemy_time);
+            change2 -= rope2.y;
+            rope3.y = Math.max(rope3.GetDouble("started"), rope3.y - 1200 * glob.enemy_time);
+            change3 -= rope3.y;
+            if (change == 0 && change2 == 0 && change3 == 0 && glob.astronomer.y > animator.height / 2) rope.Remove("reset");
+        }
+        if (glob.FindSprites("Bull", glob.enemies).isEmpty()) {
+            for (Sprite door : glob.GetSprites(glob.doors)) {
+                door.Remove("inactive");
+            }
+        }
+    }
+    
+    public static void CreateScales(double x, double y) {
+        Sprite scales = new Sprite(null, "../zodiac/Extras\\scales_top.png", 0.5, 0.5, 0, 0.666666, 0.666666, 1,  1, "scale_piece1");
+        scales.x = x;
+        scales.y = y;
+        scales.vangle = 0;
+        scales.PutInt("room", glob.room);
+        scales.PutString("back", "");
+        scales.PutString("temp", "");
+        glob.AddGeneral(scales, glob.foregrounds);
+        Sprite scales2 = new Sprite(null, "../zodiac/Extras\\scales_left.png", 0.5, 0., 0, 0.666666, 0.666666, 1,  1, "scale_piece2");
+        scales2.PutInt("room", glob.room);
+        scales2.SetFather(scales, 0.03, 0.05, 0, 999999);
+        scales2.PutString("back", "");
+        scales2.PutString("temp", "");
+        glob.AddGeneral(scales2, glob.foregrounds);
+        BufferedImage image = new BufferedImage(scales2.image.getWidth(), (int)(scales2.image.getHeight() * 0.1), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setColor(new Color(0, 0, 0, 1));
+        g.fillRect(0, 0, image.getWidth(), image.getHeight());
+        Sprite rect1 = new Sprite(image, "", 0.5, 0.5, 0, 0.666666, 0.666666, 1,  1, "scale_piece2_hitbox");
+        rect1.SetFather(scales2, 0.5, 0.95, 0, 999999);
+        rect1.PutInt("room", glob.room);
+        rect1.PutString("temp", "");
+        glob.AddGeneral(rect1, glob.obstacles);
+        Sprite scales3 = new Sprite(null, "../zodiac/Extras\\scales_right.png", 0.5, 0., 0, 0.666666, 0.666666, 1,  1, "scale_piece3");
+        scales3.PutInt("room", glob.room);
+        scales3.SetFather(scales, 0.97, 0.05, 0, 999999);
+        scales3.PutString("back", "");
+        scales3.PutString("temp", "");
+        glob.AddGeneral(scales3, glob.foregrounds);
+        BufferedImage image2 = new BufferedImage(scales2.image.getWidth(), (int)(scales2.image.getHeight() * 0.1), BufferedImage.TYPE_INT_ARGB);
+        g = image2.createGraphics();
+        g.setColor(new Color(0, 0, 0, 1));
+        g.fillRect(0, 0, image2.getWidth(), image2.getHeight());
+        Sprite rect2 = new Sprite(image2, "", 0.5, 0.5, 0, 0.666666, 0.666666, 1,  1, "scale_piece3_hitbox");
+        rect2.SetFather(scales3, 0.5, 0.95, 0, 999999);
+        rect2.PutInt("room", glob.room);
+        rect2.PutString("temp", "");
+        glob.AddGeneral(rect2, glob.obstacles);
+    }
+    
+    public static void KillScales() {
+        for (Sprite scale : glob.FindSprites("scale_piece1", glob.foregrounds)) scale.health = 0;
+        for (Sprite scale : glob.FindSprites("scale_piece2", glob.foregrounds)) scale.health = 0;
+        for (Sprite scale : glob.FindSprites("scale_piece2_hitbox", glob.obstacles)) scale.health = 0;
+        for (Sprite scale : glob.FindSprites("scale_piece3", glob.foregrounds)) scale.health = 0;
+        for (Sprite scale : glob.FindSprites("scale_piece3_hitbox", glob.obstacles)) scale.health = 0;
+    }
+    
+    public void Move_scale_piece1(Sprite scale) {
+        for (Sprite obstacle : glob.FindSprites("scale_piece2_hitbox", glob.obstacles)) {
+            Point2D p = glob.astronomer.Collision(obstacle);
+            if (p != null && p.getY() > glob.astronomer.y) {
+                scale.vangle += 2 * Math.cos(scale.angle) * glob.astronomer_time;
+            }
+        }
+        for (Sprite obstacle : glob.FindSprites("scale_piece3_hitbox", glob.obstacles)) {
+            Point2D p = glob.astronomer.Collision(obstacle);
+            if (p != null && p.getY() > glob.astronomer.y) {
+                scale.vangle -= 2 * Math.cos(scale.angle) * glob.astronomer_time;
+            }
+        }
+        scale.vangle -= (0.6 * scale.angle + 0.5 * scale.vangle) * glob.astronomer_time;
+        scale.angle += scale.vangle * glob.astronomer_time;
+    }
+}
